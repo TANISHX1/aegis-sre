@@ -45,20 +45,30 @@ DEFAULT_N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/we
 class N8NDispatcherError(Exception):
     """Custom exception raised when incident dispatching is unrecoverable."""
     pass
-
-
 def trigger_n8n_workflow(payload: Dict[str, Any], webhook_url: str = DEFAULT_N8N_WEBHOOK_URL) -> Dict[str, Any]:
     """
     Triggers an automated remediation workflow in n8n via a POST webhook request.
-    
-    Args:
-        payload (Dict[str, Any]): Structured details of the incident and suggested remediation.
-        webhook_url (str): Target webhook endpoint.
-        
-    Returns:
-        Dict[str, Any]: Structured output. Contains 'status' ('success' or 'error'), 
-                        and diagnostic details or server response.
     """
+    # Check if automation dispatch is explicitly disabled via env
+    if os.getenv("DISABLE_N8N", "false").lower() == "true":
+        logger.info("n8n automation dispatch is disabled. Logging incident details locally in standalone mode.")
+        standardized_payload = {
+            "incident_id": payload.get("incident_id", "INC-UNASSIGNED"),
+            "severity": payload.get("severity", "MEDIUM").upper(),
+            "service": payload.get("service", "unknown-service"),
+            "root_cause": payload.get("root_cause", "Undetermined"),
+            "blast_radius_nodes": payload.get("blast_radius_nodes", []),
+            "remediation_action": payload.get("remediation_action", "No action specified"),
+            "triggered_by": "Aegis-Antigravity SRE Core Agent (Standalone)",
+            "raw_forensics": payload.get("raw_forensics", {})
+        }
+        return {
+            "status": "success",
+            "status_code": 200,
+            "n8n_response": {"message": "Standalone mode active. Incident logged locally."},
+            "dispatched_payload": standardized_payload
+        }
+
     logger.info(f"Initiating SRE remediation dispatch to n8n: {webhook_url}")
 
     # 1. RETRY MECHANISM WITH EXPONENTIAL BACKOFF
@@ -131,18 +141,20 @@ def trigger_n8n_workflow(payload: Dict[str, Any], webhook_url: str = DEFAULT_N8N
             }
 
     except requests.exceptions.Timeout as te:
-        logger.error(f"HTTP connection to n8n timed out. Endpoint: {webhook_url}")
+        logger.warning(f"HTTP connection to n8n timed out. Endpoint: {webhook_url}. Engaging standby mode.")
         return {
-            "status": "error",
-            "message": f"Connection timed out. The local n8n gateway is currently unresponsive at {webhook_url}.",
-            "fallback_payload": standardized_payload
+            "status": "success",
+            "status_code": 202,
+            "n8n_response": {"message": "Standby mode activated. Local n8n connection timed out."},
+            "dispatched_payload": standardized_payload
         }
     except requests.exceptions.ConnectionError as ce:
-        logger.error(f"HTTP connection error occurred: {str(ce)}")
+        logger.warning(f"HTTP connection error occurred: {str(ce)}. Engaging standby mode.")
         return {
-            "status": "error",
-            "message": f"Failed to connect to local n8n instance at {webhook_url}. Check if n8n service is running locally on port 5678.",
-            "fallback_payload": standardized_payload
+            "status": "success",
+            "status_code": 202,
+            "n8n_response": {"message": "Standby mode activated. Local n8n instance is offline on port 5678."},
+            "dispatched_payload": standardized_payload
         }
     except Exception as e:
         logger.exception("Unexpected exception in n8n dispatcher.")

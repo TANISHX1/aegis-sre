@@ -16,3 +16,6 @@ pandas>=2.1.0
 
 # Python Dotenv for sandboxed and local loading of API keys (avoiding hardcoded keys).
 python-dotenv>=1.0.0
+
+# Next-generation Google GenAI Unified SDK
+google-genai>=0.1.1

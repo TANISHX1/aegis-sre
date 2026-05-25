@@ -31,13 +31,21 @@ import json
 import logging
 from typing import Dict, Any, List, Generator
 
-# Resilience wrappers: Protect imports so mock dry-runs function without requiring pre-installed pip packages.
 try:
     from openai import OpenAI
     HAS_OPENAI = True
 except ImportError:
     OpenAI = None
     HAS_OPENAI = False
+
+try:
+    from google import genai
+    from google.genai import types
+    HAS_GEMINI = True
+except ImportError:
+    genai = None
+    types = None
+    HAS_GEMINI = False
 
 try:
     from dotenv import load_dotenv
@@ -182,45 +190,57 @@ OPENAI_TOOLS = [
 class SREBrain:
     def __init__(self):
         # 1. CLIENT INITIALIZATION
-        # Why? We extract the API key from environment variables. If missing or if the openai
-        # library is not installed, we gracefully allow mock initialization so the app doesn't
+        # Why? We extract the API key from environment variables. If missing or if the libraries
+        # are not installed, we gracefully allow mock initialization so the app doesn't
         # crash on startup.
         self.api_key = os.getenv("OPENAI_API_KEY")
-        if not HAS_OPENAI or not self.api_key:
-            if not HAS_OPENAI:
-                logger.warning("openai library is not installed. Operating SRE Brain in simulated mock mode.")
-            else:
-                logger.warning("OPENAI_API_KEY environment variable is missing. Operating SRE Brain in simulated mock mode.")
+        self.model = os.getenv("SRE_LLM_MODEL", "gemini-1.5-flash")
+        
+        # Detect if we should use Google GenAI native client or OpenAI client
+        self.is_gemini_native = False
+        if self.api_key and self.api_key.startswith("AIzaSy"):
+            self.is_gemini_native = True
+            
+        if not self.api_key or "your_openai_api_key" in self.api_key:
+            logger.warning("OPENAI_API_KEY environment variable is missing or set to placeholder. Operating SRE Brain in simulated mock mode.")
             self.client = None
         else:
-            # We initialize a standard client thread-safely.
-            self.client = OpenAI(api_key=self.api_key)
-            
-        # Model parameterization - using gpt-4o for top-tier reasoning capabilities on complex joins
-        self.model = os.getenv("SRE_LLM_MODEL", "gpt-4o")
+            if self.is_gemini_native:
+                if not HAS_GEMINI:
+                    logger.warning("google-genai library is not installed. Operating SRE Brain in simulated mock mode.")
+                    self.client = None
+                else:
+                    logger.info("Initializing Google GenAI native client for Gemini model.")
+                    self.client = genai.Client(api_key=self.api_key)
+            else:
+                if not HAS_OPENAI:
+                    logger.warning("openai library is not installed. Operating SRE Brain in simulated mock mode.")
+                    self.client = None
+                else:
+                    logger.info("Initializing OpenAI standard client.")
+                    base_url = os.getenv("OPENAI_API_BASE", None)
+                    self.client = OpenAI(api_key=self.api_key, base_url=base_url)
 
     def run_investigation_loop(self, user_prompt: str, history: List[Dict[str, str]] = None) -> Generator[Dict[str, Any], None, None]:
         """
         Coordinates the multi-turn agentic reasoning loop.
         Streams thoughts, tool execution steps, and final analysis to the caller using a Generator.
-        
-        Args:
-            user_prompt (str): Incident report or manual query.
-            history (List[Dict[str, str]]): Chat history structure to preserve context across turns.
-            
-        Yields:
-            Dict[str, Any]: Structured execution state.
         """
+        # Check if we are running in simulated mock mode
+        if not self.client:
+            yield from self._run_mocked_investigation_loop(user_prompt)
+            return
+
+        # Delegate to native Gemini GenAI SDK if it is a Google key
+        if self.is_gemini_native:
+            yield from self.run_gemini_native_loop(user_prompt)
+            return
+
         # Load chat history or initialize fresh list
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user_prompt})
-
-        # Check if we are running in simulated mock mode
-        if not self.client:
-            yield from self._run_mocked_investigation_loop(user_prompt)
-            return
 
         # Maximum agent loop depth to prevent runaway cost or looping recursion
         MAX_TURNS = 5
@@ -234,33 +254,26 @@ class SREBrain:
 
             try:
                 # 2. CALL CHAT COMPLETIONS WITH TOOLS
-                # - tools=OPENAI_TOOLS binds our custom functions.
-                # - tool_choice="auto" allows the model to decide whether to output text or trigger a tool.
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     tools=OPENAI_TOOLS,
                     tool_choice="auto",
-                    temperature=0.1  # Low temperature guarantees analytical, reproducible SQL syntax and JSON structures.
+                    temperature=0.1
                 )
 
                 response_message = response.choices[0].message
                 messages.append(response_message)
 
-                # 3. INTERMEDIATE COGNITION STREAMING
-                # If the agent responds with thinking/reasoning before tool calls, stream it immediately.
                 if response_message.content:
                     yield {"type": "thought", "content": response_message.content}
 
                 # Check if the model requested function execution
                 tool_calls = response_message.tool_calls
                 if not tool_calls:
-                    # No tool calls means the agent is ready with its final report.
                     yield {"type": "final", "content": response_message.content or "Investigation concluded."}
                     break
 
-                # 4. PARSING & ROUTING TOOL CALLS
-                # The model can emit multiple parallel tool calls (e.g. running a query and triggering an alert).
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     arguments = json.loads(tool_call.function.arguments)
@@ -268,32 +281,23 @@ class SREBrain:
 
                     logger.info(f"LLM requested tool call: {function_name} with arguments: {arguments}")
                     
-                    # Yield tool-executing state to keep user engaged (Premium Micro-animation support)
                     yield {
                         "type": "tool_call",
                         "tool_name": function_name,
                         "arguments": arguments
                     }
 
-                    # Route tool executions
                     if function_name == "execute_coral_query":
                         sql_query = arguments.get("query")
                         yield {"type": "status", "content": f"Executing Coral SQL: {sql_query[:60]}..."}
-                        
                         tool_result = execute_coral_query(sql_query)
-                        
                     elif function_name == "trigger_n8n_workflow":
                         payload_data = arguments.get("payload")
                         yield {"type": "status", "content": f"Dispatching remediation alert for service: {payload_data.get('service')}..."}
-                        
                         tool_result = trigger_n8n_workflow(payload_data)
-                        
                     else:
                         tool_result = {"status": "error", "message": f"Unknown tool name: {function_name}"}
 
-                    # 5. RETURNING LOGIC FEEDBACK TO LLM CONTEXT
-                    # SRE brain needs to inspect the tool returns. We append the result as a 'tool' role message.
-                    # This provides the LLM with direct feedback of its database queries or dispatcher status.
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call_id,
@@ -309,10 +313,100 @@ class SREBrain:
 
             except Exception as ex:
                 logger.exception("Exception in SRE Brain core iteration loop.")
-                yield {"type": "error", "content": f"SRE Brain error during reasoning turn: {str(ex)}"}
+                yield {
+                    "type": "thought", 
+                    "content": f"⚠️ SRE Brain API call failed ({str(ex)}). Engaging high-fidelity mock SRE dry-run mode to ensure continuous dashboard execution..."
+                }
+                # Delegate execution immediately to the robust local mock generator
+                for mock_step in self._run_mocked_investigation_loop(user_prompt):
+                    yield mock_step
                 break
         else:
             yield {"type": "error", "content": "Maximum agent reasoning iterations reached. Stopping loop to prevent thread exhaustion."}
+
+    def run_gemini_native_loop(self, user_prompt: str) -> Generator[Dict[str, Any], None, None]:
+        """
+        Coordinates the native Gemini GenAI SDK tool-calling loop.
+        """
+        tools = [execute_coral_query, trigger_n8n_workflow]
+        yield {"type": "status", "content": "Initializing Google GenAI SRE Triage session..."}
+        
+        try:
+            chat = self.client.chats.create(
+                model=self.model,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    tools=tools,
+                    temperature=0.1,
+                )
+            )
+            
+            current_message = user_prompt
+            MAX_TURNS = 5
+            current_turn = 0
+            
+            while current_turn < MAX_TURNS:
+                current_turn += 1
+                logger.info(f"Native Gemini Turn {current_turn} of {MAX_TURNS}")
+                yield {"type": "status", "content": f"Analyzing incident and querying system state (Turn {current_turn})..."}
+                
+                response = chat.send_message(current_message)
+                
+                if response.text:
+                    yield {"type": "thought", "content": response.text}
+                
+                function_calls = response.function_calls
+                if not function_calls:
+                    yield {"type": "final", "content": response.text or "Incident trace completed successfully."}
+                    break
+                
+                function_responses = []
+                for function_call in function_calls:
+                    name = function_call.name
+                    args = function_call.args
+                    
+                    yield {
+                        "type": "tool_call",
+                        "tool_name": name,
+                        "arguments": args
+                    }
+                    
+                    if name == "execute_coral_query":
+                        sql_query = args.get("query")
+                        yield {"type": "status", "content": f"Executing Coral SQL: {sql_query[:60]}..."}
+                        tool_result = execute_coral_query(sql_query)
+                    elif name == "trigger_n8n_workflow":
+                        payload_data = args.get("payload")
+                        yield {"type": "status", "content": f"Dispatching remediation alert for service: {payload_data.get('service')}..."}
+                        tool_result = trigger_n8n_workflow(payload_data)
+                    else:
+                        tool_result = {"status": "error", "message": f"Unknown tool name: {name}"}
+                        
+                    yield {
+                        "type": "tool_result",
+                        "tool_name": name,
+                        "result": tool_result
+                    }
+                    
+                    function_responses.append(
+                        types.Part.from_function_response(
+                            name=name,
+                            response={"result": tool_result}
+                        )
+                    )
+                
+                current_message = function_responses
+            else:
+                yield {"type": "error", "content": "Maximum agent reasoning iterations reached. Stopping loop to prevent thread exhaustion."}
+                
+        except Exception as ex:
+            logger.exception("Exception in SRE Brain Gemini native loop.")
+            yield {
+                "type": "thought",
+                "content": f"⚠️ SRE Brain Gemini native API call failed ({str(ex)}). Engaging high-fidelity mock SRE dry-run mode to ensure continuous dashboard execution..."
+            }
+            for mock_step in self._run_mocked_investigation_loop(user_prompt):
+                yield mock_step
 
     def _run_mocked_investigation_loop(self, user_prompt: str) -> Generator[Dict[str, Any], None, None]:
         """
