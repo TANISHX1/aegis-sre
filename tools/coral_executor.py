@@ -41,6 +41,41 @@ class CoralExecutorError(Exception):
     pass
 
 
+import os
+
+def _is_source_registered(coral_binary: str, source_name: str) -> bool:
+    """Check if a named source is already registered in Coral."""
+    try:
+        result = subprocess.run(
+            [coral_binary, "source", "list"],
+            capture_output=True, text=True, timeout=5.0
+        )
+        return source_name in result.stdout
+    except Exception:
+        return False
+
+
+def _init_coral_sources(coral_binary: str):
+    """
+    Dynamically configure Coral data sources based on available credentials.
+    Uses `coral source list` to check state instead of a fragile process-global flag,
+    ensuring correctness even after Reflex hot-reloads.
+    """
+    github_token = os.environ.get("GITHUB_TOKEN")
+    has_real_token = github_token and github_token.strip() and "your_github" not in github_token
+    
+    github_registered = _is_source_registered(coral_binary, "github")
+    
+    if has_real_token and not github_registered:
+        logger.info("✅ Real GITHUB_TOKEN detected! Configuring live GitHub API source in Coral.")
+        # Pass the token explicitly in the subprocess environment so coral picks it up
+        env = {**os.environ, "GITHUB_TOKEN": github_token}
+        subprocess.run([coral_binary, "source", "add", "github"], capture_output=True, env=env)
+    elif not has_real_token and not github_registered:
+        logger.info("No GITHUB_TOKEN detected. Registering offline Parquet mock for GitHub.")
+        subprocess.run([coral_binary, "source", "add", "--file", "github-source.yaml"], capture_output=True)
+
+
 def execute_coral_query(query: str, timeout: float = 30.0) -> Dict[str, Any]:
     """
     Executes a federated Coral SQL query via local CLI subprocess execution.
@@ -53,19 +88,14 @@ def execute_coral_query(query: str, timeout: float = 30.0) -> Dict[str, Any]:
         Dict[str, Any]: Structured output. Contains 'status' ('success' or 'error'), 
                         and either 'data' (JSON query results) or 'message' (error details).
     """
-    # If the query is targeting local parquet files or vulnerability datasets,
-    # the local CLI (which only has github registered) cannot execute it natively.
-    # Therefore, we automatically route it to our high-fidelity mock execution engine
-    # to guarantee a correct SRE response.
-    query_upper = query.upper()
-    is_local_or_osv = "READ(" in query_upper or "PARQUET" in query_upper or "OSV" in query_upper or "LOCAL_FILE" in query_upper
-
     coral_binary = shutil.which("coral")
-    if not coral_binary or is_local_or_osv:
-        if is_local_or_osv:
-            logger.info("Query targets local logs or OSV database. Engaging high-fidelity mock engine.")
-        else:
-            logger.warning("Coral CLI binary 'coral' not found in PATH. Engaging mock dry-run mode.")
+    
+    # Initialize sources dynamically based on environment credentials
+    if coral_binary:
+        _init_coral_sources(coral_binary)
+        
+    if not coral_binary:
+        logger.warning("Coral CLI binary 'coral' not found in PATH. Engaging mock dry-run mode.")
         return _mock_coral_execution(query)
 
     # 2. INPUT SANITIZATION
@@ -91,13 +121,20 @@ def execute_coral_query(query: str, timeout: float = 30.0) -> Dict[str, Any]:
         # - stdout & stderr=PIPE: Redirects descriptors to memory, preventing pollution 
         #   of the parent terminal console.
         # - text=True: Decodes standard output bytes to UTF-8 dynamically.
+        # - env: Pass full environment including GITHUB_TOKEN for live API auth.
+        coral_env = {**os.environ}
+        github_token = os.getenv("GITHUB_TOKEN")
+        if github_token:
+            coral_env["GITHUB_TOKEN"] = github_token
+        
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             timeout=timeout,
-            shell=False
+            shell=False,
+            env=coral_env
         )
 
         # 5. DIAGNOSTICS & STATUS CHECK

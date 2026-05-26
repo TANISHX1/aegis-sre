@@ -1,142 +1,284 @@
-# 🛡️ Aegis-Antigravity SRE
+# 🛡️ Aegis-SRE
 ### Zero-Warehouse Root-Cause Investigation & Cyber-Incident Remediation Agent
-*Developed for **Track 1** of the **"Pirates of the Coral-bean" Hackathon***
+*Developed for **Track 1 (Enterprise Agent)** of the **"Pirates of the Coral-bean" Hackathon***
 
 ---
 
-![Aegis-Antigravity SRE Technical Architecture](assets/aegis_technical_architecture.png)
+Aegis-SRE is a next-generation, high-performance incident response platform built entirely in **pure Python** using the Reflex framework. 
 
-Aegis-Antigravity SRE is a next-generation, high-performance incident response platform built entirely in **pure Python** using the Reflex framework (Next.js/React compiled frontend + FastAPI backend). 
+Operating on a strict **Zero-Warehouse** philosophy, Aegis enables cybersecurity teams to query, join, and inspect telemetric forensic logs locally, cross-reference vulnerabilities in real-time, trace security leaks back to specific git committers, and dispatch automated remediation protocols via resilient webhooks—**all without the overhead of heavy third-party datastores.**
 
-Operating on a **Zero-Warehouse** philosophy, Aegis enables cybersecurity teams to query, join, and inspect telemetric forensic logs (Parquet format) locally, cross-reference vulnerabilities in real-time, trace security leaks back to specific git committers (such as developer `TANISHX1`), and dispatch automated remediation protocols via resilient webhooks—**all without the overhead of heavy third-party datastores.**
+It uses the **Coral CLI** to perform real-time, multi-hop federated `JOIN` operations across raw Parquet files, Google OSV vulnerability databases, and live GitHub commit histories!
 
 ---
 
-## 🧭 System Architecture & Data Flow
+## 🧭 High-Level System Architecture
 
-Aegis-Antigravity SRE utilizes a highly modular multi-hop cognitive layout where the agent orchestrates federated SQL log analysis, package vulnerability lookups, and webhook mitigation dispatches.
+Aegis-SRE utilizes a highly modular multi-hop cognitive layout where an AI Orchestrator acts as the "Brain", Coral acts as the "Data Layer", and the Webhook Receiver acts as the "Action Layer".
 
 ```mermaid
 graph TD
-    User["Operator Console (Reflex / Next.js)"] -->|Asks Question / Drops Parquet Log| State["State Management (aegis_app.py)"]
-    State -->|Triggers Async Generator| Brain["SRE Brain (agent/sre_brain.py)"]
-    Brain -->|Step 1: Parse Logs & Schema| Executor["Coral CLI Executor (coral_executor.py)"]
-    Executor -->|Subprocess shell=False| Parquet["Telemetry Parquet Logs (/logs)"]
-    Parquet -->|Returns SQL JSON Payload| Executor
-    Executor -->|JSON Response| Brain
-    Brain -->|Step 2: Check Vulnerability Database| OSV["Google OSV API"]
-    OSV -->|Identifies CVE CVE-2023-43804| Brain
-    Brain -->|Step 3: Track Git Commit History| Git["Git Repository Commits (github.commits)"]
-    Git -->|Finds author TANISHX1| Brain
-    Brain -->|Step 4: Update UI Reactively| State
-    State -->|Update Nodes Status / Color / Glow| Visuals["Blast Radius Topology (SVG Grid)"]
-    Brain -->|Step 5: Dispatch Remediation Webhook| N8N["n8n Webhook Listener (Port 5678)"]
+    %% Core Nodes
+    User["👨‍💻 Operator Console (Reflex UI)"]
+    State["🧠 Application State (aegis_app.py)"]
+    Brain["🤖 SRE Brain (Gemini / OpenAI)"]
+    Executor["⚙️ Coral CLI Executor"]
+    Webhook["⚡ Webhook Receiver (Auto-Start)"]
+    
+    %% Data Sources
+    Parquet[("📄 local_file.* (.parquet)")]
+    OSV[("🛡️ osv.packages")]
+    Git[("🐙 github.commits (Live API)")]
+    
+    %% External Integrations
+    Slack["💬 Slack"]
+    Discord["🎮 Discord"]
+
+    %% Execution Path
+    User -->|Asks Question & Drops Log File| State
+    State -->|Triggers @rx.background Generator| Brain
+    
+    %% Query Path
+    Brain -->|Step 1: Write Optimized SQL Query| Executor
+    Executor -->|Subprocess shell=False| Parquet
+    Executor -->|Cross-Reference JOIN| OSV
+    Executor -->|Live GitHub API| Git
+    
+    %% Results Path
+    Parquet -.->|Telemetry Records| Executor
+    OSV -.->|Vulnerability Matches| Executor
+    Git -.->|Real Commit History| Executor
+    Executor -.->|Parsed Results| Brain
+    
+    %% Remediation Path
+    Brain -->|Step 2: Dispatch Remediation| Webhook
+    Webhook -.->|Forward Alert| Slack
+    Webhook -.->|Forward Alert| Discord
+    Webhook -.->|Audit Log| User
+    
+    %% Styling
+    classDef ui fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
+    classDef agent fill:#8b5cf6,stroke:#5b21b6,stroke-width:2px,color:#fff
+    classDef data fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff
+    classDef action fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff
+    classDef ext fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
+    
+    class User,State ui
+    class Brain agent
+    class Executor,Parquet,OSV,Git data
+    class Webhook action
+    class Slack,Discord ext
+```
+
+---
+
+## 🔄 Sequence Workflows
+
+### 1. Forensic SQL Generation & Execution
+This workflow illustrates how the AI translates natural language into a fully federated Coral SQL query.
+
+```mermaid
+sequenceDiagram
+    participant U as Operator
+    participant UI as Reflex App
+    participant AI as SRE Brain (Gemini)
+    participant C as Coral CLI
+    participant GH as GitHub API
+    
+    U->>UI: Upload 'api_gateway_telemetry.parquet'
+    U->>UI: "Investigate 500 errors by TANISHX1"
+    UI->>AI: Trigger @rx.background forensic loop
+    
+    activate AI
+    AI-->>UI: yield: "Analyzing SRE request..."
+    AI->>AI: Introspect schemas (local_file, osv, github)
+    AI->>C: Call tool 'execute_coral_query(SQL)'
+    
+    activate C
+    C->>C: Scan local_file.api_gateway_logs
+    C->>C: JOIN osv.packages
+    C->>GH: JOIN github.commits (LIVE API)
+    GH-->>C: Real commit data
+    C-->>AI: JSON Result Array
+    deactivate C
+    
+    AI-->>UI: yield: "Found CVE-2023-43804 in urllib3!"
+    deactivate AI
+```
+
+### 2. Automated Remediation Dispatch
+This workflow demonstrates the auto-start webhook receiver and optional Slack/Discord forwarding.
+
+```mermaid
+sequenceDiagram
+    participant AI as SRE Brain
+    participant D as Dispatcher
+    participant W as Webhook Receiver
+    participant S as Slack/Discord
+    participant F as Audit File
+    
+    AI->>D: Call 'trigger_n8n_workflow(Payload)'
+    activate D
+    D->>D: health_check() → Is receiver alive?
+    
+    alt Receiver Online
+        D->>W: HTTP POST /webhook/aegis-sre-remediate
+    else Receiver Offline
+        D->>D: _auto_start_local_receiver()
+        Note over D: Starts background Python server on :5678
+        D->>W: HTTP POST /webhook/aegis-sre-remediate
+    end
+    
+    activate W
+    W->>F: Append to n8n_data/incident_log.jsonl
+    W->>S: Forward (if SLACK/DISCORD_WEBHOOK_URL set)
+    W-->>D: 200 OK
+    deactivate W
+    
+    D-->>AI: Success
+    deactivate D
+```
+
+### 3. Intelligent LLM Routing & Fallback
+
+```mermaid
+flowchart TD
+    Start["SREBrain.__init__()"] --> CheckGemini{"GEMINI_API_KEY set?"}
+    CheckGemini -->|Yes| GeminiSDK["Initialize google-genai Client"]
+    CheckGemini -->|No| CheckOpenAI{"OPENAI_API_KEY set?"}
+    CheckOpenAI -->|Yes| OpenAISDK["Initialize OpenAI Client"]
+    CheckOpenAI -->|No| MockMode["🔧 Mock Simulation Mode"]
+    
+    GeminiSDK --> LiveLoop["run_gemini_native_loop()"]
+    OpenAISDK --> OpenAILoop["run_investigation_loop()"]
+    
+    LiveLoop -->|API Error/Rate Limit| Fallback["Graceful Mock Fallback"]
+    OpenAILoop -->|API Error| Fallback
+    Fallback --> MockMode
+    MockMode --> Result["✅ Investigation Complete"]
+    LiveLoop --> Result
+    OpenAILoop --> Result
+    
+    style MockMode fill:#f59e0b,stroke:#d97706,color:#000
+    style GeminiSDK fill:#4285f4,stroke:#1a73e8,color:#fff
+    style OpenAISDK fill:#10a37f,stroke:#0d8c6d,color:#fff
 ```
 
 ---
 
 ## ✨ Core Engineering Innovations
 
-### 1. Zero-Warehouse Federated Analytics (`tools/coral_executor.py`)
-* **Subprocess Sandboxing**: Executes `coral sql "<query>" --format json` on raw log files using `shell=False` parameters, fully preventing injection attacks.
-* **Resource Guarding**: Enforces strict `timeout=30.0` execution thresholds to cleanly terminate runaway Cartesian joins, eliminating CPU and thread starvation.
-* **Error Self-Correction**: Translates system/syntax errors into structured JSON output, giving the LLM brain the context it needs to self-correct and adjust SQL queries dynamically.
+### 1. Zero-Warehouse Federated Analytics (Real Coral Integration)
+* **No Database Required**: All data is stored in localized Parquet files. We register these via Coral Source Manifests to run complex queries natively.
+* **Three Distinct Telemetry Scenarios**: API Gateway (500 errors), Auth Service (JWT failures), Payment Gateway (Stripe timeouts).
+* **Subprocess Sandboxing**: Executes `coral sql "<query>"` using strict `shell=False` and bounded execution limits to prevent compute starvation.
 
-### 2. Network-Resilient Webhook Dispatch (`tools/n8n_dispatcher.py`)
-* **Exponential Backoff**: Integrates `urllib3` retry adapters that absorb system packet loss, local network jitter, and webhook listener cold-starts (retries up to 3 times with backoffs: 1s, 2s, 4s).
-* **Resilient Timeouts**: Configures explicit connection (`3.05s`) and read (`10.0s`) split-timeouts to prevent slow remote receivers from locking the primary server.
+### 2. Live GitHub Integration
+* **Real Commit Scanning**: When `GITHUB_TOKEN` is provided, the agent queries live GitHub commits via Coral's native GitHub plugin — no mocks needed.
+* **Repository Targeting**: Specify `GITHUB_REPO=owner/repo` in `.env` to focus scans on specific repositories.
 
-### 3. Asynchronous Cognitive Loop (`agent/sre_brain.py`)
-* **Multi-Hop Schema Joints**: Prompts guide the agent through multi-stage federated SQL joins spanning telemetry tables, git commits, and Google's OSV vulnerability records.
-* **Dynamic Gen-Streaming**: Leverages Python async generators to stream intermediate thoughts and active tool calls to the client in real-time, giving operators complete transparency during multi-step tracing.
+### 3. Dual-LLM Native Agent Routing
+* **Gemini & OpenAI Support**: The `sre_brain.py` checks `GEMINI_API_KEY` first, then falls back to `OPENAI_API_KEY`. The Gemini path uses the native `google-genai` SDK with automatic function calling.
+* **Graceful Mock Fallback**: If API keys are missing OR the API returns an error (rate limits, etc.), the agent safely falls back to a hardcoded simulation loop.
 
-### 4. High-Fidelity Cyber-Incident Dashboard (`aegis_app/aegis_app.py`)
-* **Pure Python Reactive UI**: Implements Next.js-compiled frontend reactive controls without writing a single line of JavaScript. Uses WebSocket state syncs for smooth interactions.
-* **Neon Blast Radius Topology**: A custom visual SVG map renders compromise vectors at 60fps. Tapping nodes dynamically highlights vulnerability cards (such as urllib3 CVE commits) and outputs isolated rollback commands.
+### 4. Auto-Start Webhook Receiver
+* **Zero-Setup Remediation**: The dispatcher automatically boots a lightweight Python webhook server on port 5678 if nothing is already listening. No Docker, no n8n setup required.
+* **Audit Trail**: Every incident is logged to `n8n_data/incident_log.jsonl` in machine-readable JSONL format.
+* **Slack/Discord Forwarding**: Set `SLACK_WEBHOOK_URL` or `DISCORD_WEBHOOK_URL` in `.env` to forward real-time alerts.
 
----
-
-## 📂 Project Blueprint
-
-The workspace is organized into highly specialized modules:
-
-```
-aegis-antigravity-sre/
-├── requirements.txt                   # Pin-pointed Python system package declarations
-├── rxconfig.py                        # Reflex project compilation and app configuration
-├── test_runner.py                     # Command-line integration test-runner (dry-run ready)
-├── README.md                          # Comprehensive user and architectural manual
-├── logs/                              # Directory holding local forensic logs (e.g. Parquet files)
-├── assets/
-│   └── aegis_technical_architecture.png # Premium high-fidelity Unreal Engine style technical dataflow graphic
-├── tools/
-│   ├── __init__.py                    # Utilities package exports
-│   ├── coral_executor.py              # Secure subprocess Coral CLI runner
-│   └── n8n_dispatcher.py              # Resilient HTTP webhook dispatch adapter
-├── agent/
-│   ├── __init__.py                    # Core agent package exports
-│   └── sre_brain.py                   # Async OpenAI cognitive brain and tool bindings
-└── aegis_app/
-    ├── __init__.py                    # Reflex UI application exports
-    └── aegis_app.py                   # Dynamic dashboard, SVG reactive map, State handlers
-```
+### 5. Non-Blocking Background Investigations
+* **`@rx.background` Decorator**: The investigation loop runs in a background thread, keeping the Reflex WebSocket unblocked so the UI streams real-time thoughts without freezing.
 
 ---
 
 ## 🚀 Setting Up the Environment
 
-### 1. Ingest Python Dependencies
-Initialize a dedicated virtual environment in Fedora or Linux and load the system packages:
+### 1. Install Dependencies
 ```bash
-# Create local virtualenv to isolate libraries
 python3 -m venv venv
 source venv/bin/activate
-
-# Installpinned system manifest
 pip install -r requirements.txt
 ```
 
-### 2. Define Environment Config
-Create a `.env` file in the root of the project to specify your connection credentials:
-```ini
-OPENAI_API_KEY=your-openai-api-key-here
-SRE_LLM_MODEL=gpt-4o
-N8N_WEBHOOK_URL=http://localhost:5678/webhook/aegis-sre-remediate
+### 2. Install Coral CLI
+```bash
+curl -fsSL https://withcoral.com/install.sh | sh
 ```
-> [!NOTE]
-> If `OPENAI_API_KEY` is omitted, the SRE Brain automatically engages **Simulated Mock Mode**. It will generate mock SQL responses, trace vulnerability CVEs, and dispatch fake webhook responses, making it perfect for dry-run setups!
 
-### 3. Run Standalone Diagnostic Tests
-Confirm tool integration, retry adapters, and cognitive generators are fully functional by executing the terminal verification script:
+### 3. Configure Environment
+Create a `.env` file in the project root:
+```ini
+# LLM API Key (pick one)
+GEMINI_API_KEY=your-gemini-key-here
+# OPENAI_API_KEY=your-openai-key-here
+
+# Live GitHub integration (optional)
+GITHUB_TOKEN=your-github-pat-here
+GITHUB_REPO=YourOrg/your-repo
+
+# Webhook config (auto-configured, no changes needed)
+N8N_WEBHOOK_URL=http://localhost:5678/webhook/aegis-sre-remediate
+
+# Optional: Forward alerts to Slack/Discord
+# SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK
+# DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR/WEBHOOK
+```
+
+### 4. Generate Mock Data & Register Sources
+```bash
+python3 setup_sources.py
+```
+This single command:
+- Generates 3 telemetry Parquet files (API Gateway, Auth Service, Payment Gateway)
+- Creates OSV vulnerability mock data
+- Creates GitHub commits mock data
+- Generates YAML manifests with correct absolute paths for your machine
+- Registers all sources with Coral CLI
+
+### 5. Launch the Application
+```bash
+reflex run
+```
+Navigate to: 👉 **[http://localhost:3000](http://localhost:3000)**
+
+---
+
+## 🔍 The "Golden Path" Demo Script
+
+Follow this script to demonstrate the app for the hackathon:
+
+1. **Upload Telemetry**: Drag `logs/api_gateway_telemetry.parquet` into the **Forensic Control** dropzone.
+2. **Launch Query**: Type this prompt:
+   > *"I'm seeing 500 errors from the api-gateway since this morning. Please investigate using the uploaded server telemetry, the OSV vulnerabilities database, and our GitHub commits. Pay special attention to any commits from TANISHX1."*
+3. **Watch the Agent Think**: The **Agent Cognitive Log** panel streams real-time thoughts as the AI writes and executes Coral `JOIN` statements.
+4. **Observe Remediation**: The AI detects `urllib3` CVE-2023-43804, traces it to TANISHX1's commit, and fires the remediation webhook. Check `n8n_data/incident_log.jsonl` for the audit trail.
+
+### CLI Test (Alternative)
 ```bash
 python3 test_runner.py
 ```
+Runs the complete investigation loop from the terminal with ANSI-colored output.
 
-### 4. Launch the Web Application
-Start both the React/Next.js frontend and the FastAPI backend server with one command:
-```bash
-# Compile and bootstrap the dev environment
-reflex run
+---
+
+## 📁 Project Structure
 ```
-Once compilation completes, open your browser and navigate to:
-👉 **[http://localhost:3000](http://localhost:3000)**
-
----
-
-## 🔍 Step-by-Step Incident Investigation Flow
-
-Test the platform with this sample incident triage script:
-
-1. **Upload Telemetry**: Drag a Parquet telemetry log (e.g. `auth_logs.parquet`) into the **Forensic Control** dropzone on the left panel. This writes the file safely into `./logs/`.
-2. **Launch a Query**: Select one of the preloaded playbooks (e.g. **Zero-Warehouse Join**) or type a custom command like:
-   > *"Check if any of our active telemetry nodes have critical CVE vulnerability packages, find who committed them, and trigger immediate mitigation."*
-3. **Trace Thoughts**: Observe the **Agent Cognitive Log** panel stream intermediate logical milestones, detailing how it constructs SQL queries to join database telemetry, osv records, and git commits.
-4. **Audit Topology**: View the **Blast Radius Topology** graph on the right panel.
-   - Click compromised nodes (flashing neon coral/red) to load their details.
-   - Review service names, cluster IPs, active CVE descriptions, and the targeted rollback commands.
-5. **Observe Remediation**: Watch the cognitive loop detect that the author of the compromised code is `TANISHX1`, mark the node for quarantine, and successfully fire the resilient webhook to n8n to apply containment patches.
-
----
-
-> [!TIP]
-> **Production Deployment Recommendation**: If containerizing, ensure the `/logs` directory is mapped as a secure local volume, and configure your firewall to restrict direct subprocess execution commands strictly to the Coral CLI namespace.
+aegis-sre/
+├── aegis_app/
+│   └── aegis_app.py          # Reflex UI (glassmorphic dashboard)
+├── agent/
+│   └── sre_brain.py           # AI reasoning engine (Gemini/OpenAI + mock)
+├── tools/
+│   ├── coral_executor.py      # Coral CLI subprocess wrapper
+│   ├── n8n_dispatcher.py      # Webhook dispatcher with auto-start
+│   └── webhook_receiver.py    # Local webhook server (n8n replacement)
+├── scratch/
+│   └── generate_mock_parquet.py  # Telemetry data generator
+├── logs/                      # Parquet telemetry files
+├── n8n_data/                  # Audit trail (auto-created)
+├── setup_sources.py           # One-click Coral source registration
+├── test_runner.py             # CLI diagnostic test
+├── .env                       # API keys & config (gitignored)
+├── requirements.txt           # Python dependencies
+└── rxconfig.py                # Reflex compiler config
+```

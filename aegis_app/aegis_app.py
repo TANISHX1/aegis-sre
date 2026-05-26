@@ -125,6 +125,7 @@ class State(rx.State):
     }
 
     # 6. ASYNC CORE INVESTIGATION LOOP
+    @rx.background
     async def trigger_investigation(self):
         """
         Launches SRE Brain async reasoning.
@@ -218,7 +219,7 @@ class State(rx.State):
         Allows the Zero-Warehouse Coral engine to read and analyze them instantly.
         """
         # Resolve target directory relative to current directory
-        project_root = "/home/blazex/Documents/git/aegis-antigravity-sre"
+        project_root = os.getcwd()
         logs_dir = os.path.join(project_root, "logs")
         
         # Safe directory initialization

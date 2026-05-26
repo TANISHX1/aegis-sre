@@ -5,3 +5,6 @@
 assets/external/
 __pycache__/
 .env
+n8n_data/
+uploaded_files/
+reflex.lock/

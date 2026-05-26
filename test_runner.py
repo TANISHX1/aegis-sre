@@ -18,9 +18,14 @@ CRITICAL DESIGN CHOICES & RATIONALE (THE "WHY"):
 
 import sys
 import os
+from dotenv import load_dotenv
 
 # Ensure the root package directories are fully discoverable in sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Load the local .env file so the user's tokens are injected into the context,
+# overriding any bad system variables that might be exported in the shell.
+load_dotenv(override=True)
 
 from agent.sre_brain import SREBrain
 
