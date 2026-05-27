@@ -22,7 +22,8 @@ graph TD
     User["👨‍💻 Operator Console (Reflex UI)"]
     State["🧠 Application State (aegis_app.py)"]
     Brain["🤖 SRE Brain (Gemini / OpenAI)"]
-    Executor["⚙️ Coral CLI Executor"]
+    MCP["🔌 Coral MCP Client"]
+    CoralServer["⚙️ Coral MCP Server (mcp-stdio)"]
     Webhook["⚡ Webhook Receiver (Auto-Start)"]
     
     %% Data Sources
@@ -38,17 +39,19 @@ graph TD
     User -->|Asks Question & Drops Log File| State
     State -->|Triggers @rx.background Generator| Brain
     
-    %% Query Path
-    Brain -->|Step 1: Write Optimized SQL Query| Executor
-    Executor -->|Subprocess shell=False| Parquet
-    Executor -->|Cross-Reference JOIN| OSV
-    Executor -->|Live GitHub API| Git
+    %% MCP Query Path
+    Brain -->|Step 1: Write SQL via Function Calling| MCP
+    MCP -->|JSON-RPC 2.0 over stdio| CoralServer
+    CoralServer -->|Federated Query| Parquet
+    CoralServer -->|Cross-Reference JOIN| OSV
+    CoralServer -->|Live GitHub API| Git
     
     %% Results Path
-    Parquet -.->|Telemetry Records| Executor
-    OSV -.->|Vulnerability Matches| Executor
-    Git -.->|Real Commit History| Executor
-    Executor -.->|Parsed Results| Brain
+    Parquet -.->|Telemetry Records| CoralServer
+    OSV -.->|Vulnerability Matches| CoralServer
+    Git -.->|Real Commit History| CoralServer
+    CoralServer -.->|Structured MCP Response| MCP
+    MCP -.->|Parsed Results| Brain
     
     %% Remediation Path
     Brain -->|Step 2: Dispatch Remediation| Webhook
@@ -59,13 +62,15 @@ graph TD
     %% Styling
     classDef ui fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
     classDef agent fill:#8b5cf6,stroke:#5b21b6,stroke-width:2px,color:#fff
+    classDef mcp fill:#6366f1,stroke:#4338ca,stroke-width:2px,color:#fff
     classDef data fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff
     classDef action fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff
     classDef ext fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
     
     class User,State ui
     class Brain agent
-    class Executor,Parquet,OSV,Git data
+    class MCP,CoralServer mcp
+    class Parquet,OSV,Git data
     class Webhook action
     class Slack,Discord ext
 ```
@@ -168,25 +173,31 @@ flowchart TD
 
 ## ✨ Core Engineering Innovations
 
-### 1. Zero-Warehouse Federated Analytics (Real Coral Integration)
-* **No Database Required**: All data is stored in localized Parquet files. We register these via Coral Source Manifests to run complex queries natively.
-* **Three Distinct Telemetry Scenarios**: API Gateway (500 errors), Auth Service (JWT failures), Payment Gateway (Stripe timeouts).
-* **Subprocess Sandboxing**: Executes `coral sql "<query>"` using strict `shell=False` and bounded execution limits to prevent compute starvation.
+### 1. MCP-Native Coral Integration (Model Context Protocol)
+* **MCP-First Architecture**: Instead of shelling out to `coral sql`, we maintain a persistent MCP connection to Coral's built-in MCP server (`coral mcp-stdio`) via JSON-RPC 2.0 over stdin/stdout.
+* **Runtime Schema Discovery**: The `discover_schema()` method auto-introspects all registered Coral sources at startup — the LLM learns table structures dynamically instead of from hardcoded prompts.
+* **5 MCP Tools**: `sql`, `list_catalog`, `search_catalog`, `describe_table`, `list_columns` — all accessible through the persistent connection.
+* **Three-Tier Fallback**: MCP → subprocess → mock simulation. If MCP fails, the system gracefully degrades without crashing.
 
-### 2. Live GitHub Integration
+### 2. Zero-Warehouse Federated Analytics
+* **No Database Required**: All data is stored in localized Parquet files. We register these via Coral Source Manifests to run complex cross-source JOINs natively.
+* **Three Distinct Telemetry Scenarios**: API Gateway (500 errors), Auth Service (JWT failures), Payment Gateway (Stripe timeouts).
+
+### 3. Live GitHub Integration
 * **Real Commit Scanning**: When `GITHUB_TOKEN` is provided, the agent queries live GitHub commits via Coral's native GitHub plugin — no mocks needed.
 * **Repository Targeting**: Specify `GITHUB_REPO=owner/repo` in `.env` to focus scans on specific repositories.
+* **Dynamic Schema**: Real `github.commits` schema (sha, commit__message, commit__author__name, files, stats) auto-discovered via MCP.
 
-### 3. Dual-LLM Native Agent Routing
+### 4. Dual-LLM Native Agent Routing
 * **Gemini & OpenAI Support**: The `sre_brain.py` checks `GEMINI_API_KEY` first, then falls back to `OPENAI_API_KEY`. The Gemini path uses the native `google-genai` SDK with automatic function calling.
 * **Graceful Mock Fallback**: If API keys are missing OR the API returns an error (rate limits, etc.), the agent safely falls back to a hardcoded simulation loop.
 
-### 4. Auto-Start Webhook Receiver
+### 5. Auto-Start Webhook Receiver
 * **Zero-Setup Remediation**: The dispatcher automatically boots a lightweight Python webhook server on port 5678 if nothing is already listening. No Docker, no n8n setup required.
 * **Audit Trail**: Every incident is logged to `n8n_data/incident_log.jsonl` in machine-readable JSONL format.
 * **Slack/Discord Forwarding**: Set `SLACK_WEBHOOK_URL` or `DISCORD_WEBHOOK_URL` in `.env` to forward real-time alerts.
 
-### 5. Non-Blocking Background Investigations
+### 6. Non-Blocking Background Investigations
 * **`@rx.background` Decorator**: The investigation loop runs in a background thread, keeping the Reflex WebSocket unblocked so the UI streams real-time thoughts without freezing.
 
 ---
@@ -269,7 +280,8 @@ aegis-sre/
 ├── agent/
 │   └── sre_brain.py           # AI reasoning engine (Gemini/OpenAI + mock)
 ├── tools/
-│   ├── coral_executor.py      # Coral CLI subprocess wrapper
+│   ├── mcp_client.py          # Coral MCP client (JSON-RPC 2.0 over stdio)
+│   ├── coral_executor.py      # Query executor (MCP → subprocess → mock)
 │   ├── n8n_dispatcher.py      # Webhook dispatcher with auto-start
 │   └── webhook_receiver.py    # Local webhook server (n8n replacement)
 ├── scratch/
