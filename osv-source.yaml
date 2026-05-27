@@ -1,0 +1,9 @@
+name: osv
+version: 0.1.0
+dsl_version: 3
+backend: parquet
+tables:
+  - name: packages
+    description: "Google OSV API mock"
+    source:
+      location: "file:///home/harshitdv/Secondary_workspace/aegis-sre/logs/osv_packages.parquet"

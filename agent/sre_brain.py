@@ -58,8 +58,9 @@ except ImportError:
 from tools.coral_executor import execute_coral_query
 from tools.n8n_dispatcher import trigger_n8n_workflow
 
-# Initialize dotenv to load local secrets (e.g., OPENAI_API_KEY) in a sandboxed, environment-agnostic manner.
-load_dotenv()
+# Initialize dotenv to load local secrets. override=True ensures .env values
+# always take precedence over stale shell-exported variables.
+load_dotenv(override=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("SREBrain")
@@ -79,8 +80,8 @@ You are equipped with two tools:
 
 You do not have a standard database warehouse. Instead, you query live data sources and offline logs directly on-the-fly using Coral SQL. You MUST write complex multi-hop JOINs combining these schemas when analyzing bugs:
 
-1. **Offline Server Logs**
-   - Syntax: `local_file.read('/logs/<filename>.parquet')` (e.g., `local_file.read('/logs/server.parquet')`)
+1. **Offline Server Logs (Telemetry Data)**
+   - Namespace Tables: `local_file.api_gateway_logs`, `local_file.auth_service_logs`, `local_file.payment_gateway_logs`
    - Schema:
      * `timestamp` (TIMESTAMP): Event log time.
      * `level` (VARCHAR): 'INFO', 'WARN', 'ERROR', 'CRITICAL'.
@@ -100,37 +101,73 @@ You do not have a standard database warehouse. Instead, you query live data sour
      * `severity` (VARCHAR): 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'.
      * `summary` (VARCHAR): Description of vulnerability.
 
-3. **VCS GitHub Commits**
+3. **Live GitHub Commits (Real GitHub API via Coral)**
    - Namespace Table: `github.commits`
-   - Schema:
-     * `commit_hash` (VARCHAR): Commit SHA hash.
-     * `author` (VARCHAR): Committer username (specifically look for developer 'TANISHX1').
-     * `commit_date` (TIMESTAMP): Date commit was pushed.
-     * `message` (VARCHAR): Commit message.
-     * `changed_files` (VARCHAR): Comma-separated list of modified files (e.g., 'requirements.txt, auth_service/jwt.py').
+   - ⚠️ REQUIRED WHERE FILTERS: `owner` and `repo` are MANDATORY in every query!
+   - The target repository is: owner = '{github_owner}', repo = '{github_repo_name}'
+   - Key Columns:
+     * `sha` (VARCHAR): Full commit SHA hash.
+     * `commit__message` (VARCHAR): Commit message text.
+     * `commit__author__name` (VARCHAR): Author's display name.
+     * `commit__author__email` (VARCHAR): Author's email.
+     * `commit__author__date` (VARCHAR): Commit date (ISO 8601 format).
+     * `commit__committer__name` (VARCHAR): Committer's name.
+     * `commit__committer__date` (VARCHAR): Committer date.
+     * `author__login` (VARCHAR): GitHub username/login of the author.
+     * `committer__login` (VARCHAR): GitHub username/login of committer.
+     * `files` (VARCHAR): JSON array of changed files (includes filename, additions, deletions, changes).
+     * `stats__additions` (INTEGER): Total lines added.
+     * `stats__deletions` (INTEGER): Total lines deleted.
+     * `stats__total` (INTEGER): Total lines changed.
+     * `html_url` (VARCHAR): Web URL to view the commit on GitHub.
+   - Optional Filters:
+     * `ref` (VARCHAR): Branch name (e.g., 'heads/main') or tag (e.g., 'tags/v1.0').
+     * `path` (VARCHAR): Only return commits touching this file path.
+     * `author` (VARCHAR): Filter by GitHub username.
+     * `committer` (VARCHAR): Filter by committer username.
 
 ---
-### MULTI-HOP JOIN INSTRUCTION EXAMPLES
+### QUERY EXAMPLES
 
-To find if a commit by TANISHX1 introduced a package vulnerability currently triggering 500 errors in offline logs, you MUST construct a query joining all three tables:
+**Example 1: Get the last 30 commits from the repository:**
+```sql
+SELECT sha, commit__author__name, commit__author__date, commit__message, files
+FROM github.commits
+WHERE owner = '{github_owner}' AND repo = '{github_repo_name}'
+LIMIT 30
+```
+
+**Example 2: Cross-reference commits with vulnerabilities and logs:**
 ```sql
 SELECT 
-    l.timestamp, l.service, l.message,
-    o.package_name, o.installed_version, o.cve, o.severity,
-    g.commit_hash, g.author, g.message AS commit_msg
-FROM local_file.read('/logs/server.parquet') l
+    l.timestamp, l.service, l.message, l.response_code,
+    o.package_name, o.cve, o.severity,
+    g.sha, g.commit__author__name, g.commit__message
+FROM local_file.api_gateway_logs l
 JOIN osv.packages o ON l.message LIKE CONCAT('%', o.package_name, '%')
-JOIN github.commits g ON g.changed_files LIKE CONCAT('%', o.package_name, '%')
-WHERE g.author = 'TANISHX1' AND l.response_code = 500
+JOIN github.commits g ON g.commit__message LIKE CONCAT('%', o.package_name, '%')
+WHERE g.owner = '{github_owner}' AND g.repo = '{github_repo_name}' 
+  AND l.response_code = 500
 ORDER BY l.timestamp DESC
+```
+
+**Example 3: Find commits by a specific developer:**
+```sql
+SELECT sha, commit__author__name, commit__message, commit__author__date, files, stats__total
+FROM github.commits
+WHERE owner = '{github_owner}' AND repo = '{github_repo_name}' AND author = 'TANISHX1'
+LIMIT 20
 ```
 
 ---
 ### AGENTIC RUNNING RULES:
-1. Always analyze the user's report. If they upload a file, identify its filename and plan a query against `/logs/<filename>`.
-2. Construct queries targeting the root cause. Match vulnerabilities with recent commits (especially focusing on developer TANISHX1).
-3. If you identify a critical issue, calculate the blast radius (which nodes/services are affected) and use `trigger_n8n_workflow` to dispatch the remediation automatically.
-4. Explain your technical reasoning step-by-step to the operator, including the exact SQL joins you formulated. Keep descriptions deep, professional, and clear.
+1. Always analyze the user's report. If they upload a file, query the `local_file.*` tables.
+2. **CRITICAL**: When querying `github.commits`, you MUST always include `WHERE owner = '{github_owner}' AND repo = '{github_repo_name}'`. These are required filters — queries without them will fail.
+3. Use `LIMIT` to control how many commits to fetch (e.g., LIMIT 30 for the last 30 commits).
+4. If the user asks about a DIFFERENT repository, extract the owner and repo from their message and use those values instead.
+5. Construct queries targeting the root cause. Match vulnerabilities with recent commits.
+6. If you identify a critical issue, calculate the blast radius (which nodes/services are affected) and use `trigger_n8n_workflow` to dispatch the remediation automatically.
+7. Explain your technical reasoning step-by-step to the operator, including the exact SQL queries you formulated.
 """
 
 # Define OpenAI raw tool schemas
@@ -147,7 +184,7 @@ OPENAI_TOOLS = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The exact SQL query string. Must use local_file.read('/logs/<file>.parquet') for offline logs and join osv.packages or github.commits if needed."
+                        "description": "The exact SQL query string. Must use local_file.logs for offline logs and join osv.packages or github.commits if needed."
                     }
                 },
                 "required": ["query"]
@@ -190,36 +227,82 @@ OPENAI_TOOLS = [
 class SREBrain:
     def __init__(self):
         # 1. CLIENT INITIALIZATION
-        # Why? We extract the API key from environment variables. If missing or if the libraries
-        # are not installed, we gracefully allow mock initialization so the app doesn't
-        # crash on startup.
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.model = os.getenv("SRE_LLM_MODEL", "gemini-1.5-flash")
+        # Priority: GROQ_API_KEY > GEMINI_API_KEY > OPENAI_API_KEY
+        # Groq provides free, fast OpenAI-compatible API with generous rate limits.
+        # Gemini uses the native google-genai SDK with function calling.
+        # OpenAI is the standard fallback with configurable base URL.
         
-        # Detect if we should use Google GenAI native client or OpenAI client
+        self.provider = "mock"  # Will be set to "groq", "gemini", or "openai"
         self.is_gemini_native = False
-        if self.api_key and self.api_key.startswith("AIzaSy"):
-            self.is_gemini_native = True
-            
-        if not self.api_key or "your_openai_api_key" in self.api_key:
-            logger.warning("OPENAI_API_KEY environment variable is missing or set to placeholder. Operating SRE Brain in simulated mock mode.")
-            self.client = None
-        else:
-            if self.is_gemini_native:
-                if not HAS_GEMINI:
-                    logger.warning("google-genai library is not installed. Operating SRE Brain in simulated mock mode.")
-                    self.client = None
-                else:
-                    logger.info("Initializing Google GenAI native client for Gemini model.")
-                    self.client = genai.Client(api_key=self.api_key)
+        
+        groq_key = os.getenv("GROQ_API_KEY")
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        
+        # Guard against placeholder values
+        _placeholders = ("your_openai_api_key", "your_gemini_key", "your-key-here", 
+                         "your_groq_key", "gsk_placeholder")
+        
+        def _is_valid(key):
+            return key and key.strip() and not any(p in key.lower() for p in _placeholders)
+        
+        self.client = None
+        
+        # Priority 1: Groq (free, fast, no rate limit issues)
+        if _is_valid(groq_key):
+            if HAS_OPENAI:
+                logger.info("🚀 Initializing Groq client (Llama 3.3 70B via OpenAI-compatible API).")
+                self.api_key = groq_key
+                self.model = os.getenv("SRE_LLM_MODEL", "llama-3.3-70b-versatile")
+                self.client = OpenAI(
+                    api_key=groq_key,
+                    base_url="https://api.groq.com/openai/v1"
+                )
+                self.provider = "groq"
             else:
-                if not HAS_OPENAI:
-                    logger.warning("openai library is not installed. Operating SRE Brain in simulated mock mode.")
-                    self.client = None
-                else:
-                    logger.info("Initializing OpenAI standard client.")
-                    base_url = os.getenv("OPENAI_API_BASE", None)
-                    self.client = OpenAI(api_key=self.api_key, base_url=base_url)
+                logger.warning("Groq key found but openai library not installed.")
+        
+        # Priority 2: Gemini (native SDK with function calling)
+        if not self.client and _is_valid(gemini_key):
+            if HAS_GEMINI:
+                logger.info("Initializing Google GenAI native client for Gemini model.")
+                self.api_key = gemini_key
+                self.model = os.getenv("SRE_LLM_MODEL", "gemini-2.0-flash")
+                self.client = genai.Client(api_key=gemini_key)
+                self.is_gemini_native = True
+                self.provider = "gemini"
+            else:
+                logger.warning("Gemini key found but google-genai library not installed.")
+        
+        # Priority 3: OpenAI (standard or custom endpoint)
+        if not self.client and _is_valid(openai_key):
+            if HAS_OPENAI:
+                base_url = os.getenv("OPENAI_API_BASE", None)
+                logger.info(f"Initializing OpenAI client{' (custom endpoint)' if base_url else ''}.")
+                self.api_key = openai_key
+                self.model = os.getenv("SRE_LLM_MODEL", "gpt-4o")
+                self.client = OpenAI(api_key=openai_key, base_url=base_url)
+                self.provider = "openai"
+            else:
+                logger.warning("OpenAI key found but openai library not installed.")
+        
+        if not self.client:
+            logger.warning("No valid LLM API key found (checked GROQ_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY). Operating in mock mode.")
+
+        # 2. DYNAMIC SYSTEM PROMPT CONFIGURATION
+        # Inject the target GitHub repository from environment into the system prompt
+        # so the LLM generates correct WHERE owner/repo clauses automatically.
+        github_repo = os.getenv("GITHUB_REPO", "Harshit7623/aegis-sre")
+        if "/" in github_repo:
+            self.github_owner, self.github_repo_name = github_repo.split("/", 1)
+        else:
+            self.github_owner, self.github_repo_name = "Harshit7623", github_repo
+        
+        self.system_prompt = SYSTEM_PROMPT.format(
+            github_owner=self.github_owner,
+            github_repo_name=self.github_repo_name
+        )
+        logger.info(f"System prompt configured for repo: {self.github_owner}/{self.github_repo_name}")
 
     def run_investigation_loop(self, user_prompt: str, history: List[Dict[str, str]] = None) -> Generator[Dict[str, Any], None, None]:
         """
@@ -237,7 +320,7 @@ class SREBrain:
             return
 
         # Load chat history or initialize fresh list
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": self.system_prompt}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user_prompt})
@@ -335,7 +418,7 @@ class SREBrain:
             chat = self.client.chats.create(
                 model=self.model,
                 config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT,
+                    system_instruction=self.system_prompt,
                     tools=tools,
                     temperature=0.1,
                 )
@@ -413,16 +496,17 @@ class SREBrain:
         Fallback simulation loop when OPENAI_API_KEY is not defined.
         Allows the application to run fully, simulating agentic tool calls, database joins, and remediation.
         """
-        import asyncio
         logger.info("Engaging mocked SRE brain reasoning generator.")
         
         yield {"type": "status", "content": "Simulating cognitive analysis of incident..."}
         
-        # Simulated delay mimicking LLM processing time (increases perceived UI realism)
         yield {"type": "thought", "content": "Analyzing SRE request. Initiating forensic scan of logs, vulnerabilities, and GitHub git history."}
         
         # 1. Simulate Coral SQL execution tool call
-        mock_sql = "SELECT * FROM local_file.read('/logs/server.parquet') JOIN osv.packages JOIN github.commits WHERE author = 'TANISHX1'"
+        # Dynamically pull repo from env so this adapts to any user's configuration
+        github_repo = os.getenv("GITHUB_REPO", "Harshit7623/aegis-sre")
+        owner, repo = github_repo.split("/") if "/" in github_repo else ("Harshit7623", "aegis-sre")
+        mock_sql = f"SELECT * FROM local_file.api_gateway_logs JOIN osv.packages JOIN github.commits WHERE author = 'TANISHX1' AND owner = '{owner}' AND repo = '{repo}'"
         yield {
             "type": "tool_call",
             "tool_name": "execute_coral_query",

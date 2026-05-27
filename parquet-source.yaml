@@ -1,0 +1,17 @@
+name: local_file
+version: 0.1.0
+dsl_version: 3
+backend: parquet
+tables:
+  - name: api_gateway_logs
+    description: "API Gateway 500 error telemetry"
+    source:
+      location: "file:///home/harshitdv/Secondary_workspace/aegis-sre/logs/api_gateway_telemetry.parquet"
+  - name: auth_service_logs
+    description: "Auth Service JWT telemetry"
+    source:
+      location: "file:///home/harshitdv/Secondary_workspace/aegis-sre/logs/auth_service_telemetry.parquet"
+  - name: payment_gateway_logs
+    description: "Payment Gateway Stripe telemetry"
+    source:
+      location: "file:///home/harshitdv/Secondary_workspace/aegis-sre/logs/payment_gateway_telemetry.parquet"

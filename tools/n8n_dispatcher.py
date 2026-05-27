@@ -2,26 +2,30 @@
 Aegis-Antigravity SRE: n8n Workflow Dispatcher Engine
 -----------------------------------------------------
 This module coordinates SRE remediation notifications and automated recovery 
-by firing webhooks to a local n8n automation flow listener.
+by firing webhooks to a local webhook receiver or n8n automation flow.
 
 CRITICAL ARCHITECTURAL DESIGN CHOICES & RATIONALE (THE "WHY"):
 1. Decoupled Webhook Dispatcher with Resilience:
-   Webhooks rely on external networks or local system orchestration daemons (n8n container/service).
-   If n8n is overloaded or initializing, connection requests can time out or drop. We use a 
-   resilient HTTP Session adapter with exponential backoff retries (urllib3.util.Retry) to automatically
-   absorb network jitter or cold-start latency, ensuring robust reliability without code bloat.
+   Webhooks rely on external networks or local system orchestration daemons.
+   If the receiver is overloaded or initializing, connection requests can time out or drop. 
+   We use a resilient HTTP Session adapter with exponential backoff retries (urllib3.util.Retry) 
+   to automatically absorb network jitter or cold-start latency.
 
-2. Explicit Request Timeouts (Connection vs. Read):
-   Passing a single timeout value to requests.post can block a thread indefinitely if the target server 
-   establishes a connection but never writes back. We enforce a split-timeout tuple:
-   - Connect Timeout (3.05s): The time needed to establish a TCP socket (3.05s matches the standard TCP packet retransmission window).
-   - Read Timeout (10.0s): The time allowed to wait for n8n to digest the payload and send a response.
+2. Auto-Start Local Webhook Receiver:
+   If no external n8n instance or webhook server is detected on the configured port,
+   the dispatcher automatically boots our built-in Python webhook receiver as a background 
+   thread. This guarantees that remediation payloads are ALWAYS received and logged,
+   even in demo/hackathon environments with zero Docker setup.
+
+3. Explicit Request Timeouts (Connection vs. Read):
+   We enforce a split-timeout tuple:
+   - Connect Timeout (3.05s): Matches the standard TCP packet retransmission window.
+   - Read Timeout (10.0s): Time allowed to wait for the receiver to process the payload.
    This guarantees that the main application thread will never freeze.
 
-3. Structured Incident Payloads for Downstream Action:
-   Rather than letting the agent emit raw, unstructured text strings to n8n, this module enforces
-   and validates a strict schema (incident metadata, severity levels, blast radius, target service) 
-   so n8n can reliably route data to Slack blocks, Jira issues, or PagerDuty schedules.
+4. Structured Incident Payloads for Downstream Action:
+   Enforces a strict schema (incident metadata, severity levels, blast radius, target service) 
+   so downstream receivers can reliably route data to Slack blocks, Jira issues, or PagerDuty schedules.
 """
 
 import os
@@ -37,14 +41,49 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("N8NDispatcher")
 
 # Default local webhook configuration.
-# Why? Local n8n instances usually bind to port 5678. Webhook nodes are prefixed with /webhook-test or /webhook.
-# Using environment variables allows zero-code changes when moving from local dev to a production container.
 DEFAULT_N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/aegis-sre-remediate")
+DEFAULT_HEALTHZ_URL = DEFAULT_N8N_WEBHOOK_URL.rsplit("/webhook/", 1)[0] + "/healthz"
+
+# Track whether we've already auto-started the local receiver this session
+_LOCAL_RECEIVER_STARTED = False
 
 
 class N8NDispatcherError(Exception):
     """Custom exception raised when incident dispatching is unrecoverable."""
     pass
+
+
+def health_check(healthz_url: str = DEFAULT_HEALTHZ_URL, timeout: float = 2.0) -> bool:
+    """
+    Ping the webhook receiver's health endpoint to check if it's alive.
+    Returns True if healthy, False otherwise.
+    """
+    try:
+        resp = requests.get(healthz_url, timeout=timeout)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def _auto_start_local_receiver():
+    """
+    Auto-start the built-in Python webhook receiver as a background thread
+    if no external n8n/webhook server is detected. This ensures remediation 
+    payloads are always captured even without Docker.
+    """
+    global _LOCAL_RECEIVER_STARTED
+    if _LOCAL_RECEIVER_STARTED:
+        return
+    
+    try:
+        from tools.webhook_receiver import start_webhook_server
+        start_webhook_server(background=True)
+        _LOCAL_RECEIVER_STARTED = True
+        logger.info("🚀 Auto-started local webhook receiver on port 5678.")
+    except Exception as e:
+        logger.warning(f"Could not auto-start local webhook receiver: {e}")
+
+
 def trigger_n8n_workflow(payload: Dict[str, Any], webhook_url: str = DEFAULT_N8N_WEBHOOK_URL) -> Dict[str, Any]:
     """
     Triggers an automated remediation workflow in n8n via a POST webhook request.
@@ -69,7 +108,15 @@ def trigger_n8n_workflow(payload: Dict[str, Any], webhook_url: str = DEFAULT_N8N
             "dispatched_payload": standardized_payload
         }
 
-    logger.info(f"Initiating SRE remediation dispatch to n8n: {webhook_url}")
+    logger.info(f"Initiating SRE remediation dispatch to webhook: {webhook_url}")
+
+    # Auto-start the local webhook receiver if nothing is listening
+    if not health_check():
+        logger.info("No webhook receiver detected. Auto-starting local receiver...")
+        _auto_start_local_receiver()
+        # Give the background thread a moment to bind the port
+        import time
+        time.sleep(0.5)
 
     # 1. RETRY MECHANISM WITH EXPONENTIAL BACKOFF
     # Why? Local hackathon networks or local Docker setups can experience temporary packet drops.

@@ -1,0 +1,9 @@
+name: github
+version: 0.1.0
+dsl_version: 3
+backend: parquet
+tables:
+  - name: commits
+    description: "GitHub commits mock"
+    source:
+      location: "file:///home/harshitdv/Secondary_workspace/aegis-sre/logs/github_commits.parquet"

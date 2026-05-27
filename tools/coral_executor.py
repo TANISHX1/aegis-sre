@@ -1,32 +1,33 @@
 """
-Aegis-Antigravity SRE: Coral CLI Query Executor Engine
-------------------------------------------------------
-This module implements the execution wrapper for the local Coral CLI.
-In a zero-warehouse architecture, Coral queries are executed on-the-fly, 
-federating local parquet logs and remote vulnerability databases.
+Aegis-Antigravity SRE: Coral Query Executor Engine
+---------------------------------------------------
+This module implements the execution wrapper for Coral, using the Model Context
+Protocol (MCP) as the primary data access layer.
 
 CRITICAL ARCHITECTURAL DESIGN CHOICES & RATIONALE (THE "WHY"):
-1. Subprocess Call Isolation (shell=False):
-   By passing command arguments as a list and explicitly setting `shell=False`, we prevent 
-   the operating system from spawning a shell process (like /bin/sh or /bin/bash) to evaluate the query. 
-   This fundamentally immunizes the system against shell injection attacks (e.g., executing arbitrary 
-   commands via semicolons or shell expansions like `$(...)`), as arguments are passed directly 
-   to the system call execve().
-   
-2. Strict Resource and Execution Timeouts:
-   Coral SQL joins offline log files with external network resources (e.g., Google OSV API, Sentry). 
-   Network failures or malicious/inefficient joins (e.g., Cartesian products on large datasets) 
-   could freeze execution. Setting a rigid timeout (default 30.0s) prevents thread starvation 
-   in the web application server and avoids CPU exhaustion.
+1. MCP-First Architecture:
+   Instead of shelling out to `coral sql` via subprocess on every query, we maintain
+   a persistent MCP connection to `coral mcp-stdio`. This gives us structured responses,
+   typed errors, and access to Coral's full tool suite (catalog, schema discovery, SQL)
+   through a single persistent process — eliminating ~300ms cold-start per query.
 
-3. Structured Error Diagnostics for SRE Brain:
-   LLM agents need highly descriptive error contexts to perform self-correction. Instead of 
-   crashing or returning generic error codes, this module parses stderr, captures CLI signals, 
-   and returns structured JSON detailing syntax mistakes, file access failures, or timeout events.
+2. Graceful Degradation Chain:
+   The executor follows a three-tier fallback: MCP → subprocess → mock.
+   If the MCP connection fails, it falls back to raw subprocess execution.
+   If Coral isn't installed at all, it falls back to the mock engine.
+
+3. Strict Resource and Execution Timeouts:
+   Network failures or inefficient joins could freeze execution. The MCP client
+   enforces timeouts internally, preventing thread starvation in the web server.
+
+4. Structured Error Diagnostics for SRE Brain:
+   LLM agents need descriptive error contexts for self-correction. Both MCP and
+   subprocess paths return structured JSON with status, data, and error messages.
 """
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 from typing import Dict, Any, Union
@@ -41,108 +42,108 @@ class CoralExecutorError(Exception):
     pass
 
 
+# MCP Client import — the primary execution path
+try:
+    from tools.mcp_client import get_mcp_client
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+    logger.warning("MCP client not available. Falling back to subprocess execution.")
+
+
+def _is_source_registered(coral_binary: str, source_name: str) -> bool:
+    """Check if a named source is already registered in Coral."""
+    try:
+        result = subprocess.run(
+            [coral_binary, "source", "list"],
+            capture_output=True, text=True, timeout=5.0
+        )
+        return source_name in result.stdout
+    except Exception:
+        return False
+
+
+def _init_coral_sources(coral_binary: str):
+    """
+    Dynamically configure Coral data sources based on available credentials.
+    """
+    github_token = os.environ.get("GITHUB_TOKEN")
+    has_real_token = github_token and github_token.strip() and "your_github" not in github_token
+    
+    github_registered = _is_source_registered(coral_binary, "github")
+    
+    if has_real_token and not github_registered:
+        logger.info("✅ Real GITHUB_TOKEN detected! Configuring live GitHub API source in Coral.")
+        env = {**os.environ, "GITHUB_TOKEN": github_token}
+        subprocess.run([coral_binary, "source", "add", "github"], capture_output=True, env=env)
+    elif not has_real_token and not github_registered:
+        logger.info("No GITHUB_TOKEN detected. Registering offline Parquet mock for GitHub.")
+        subprocess.run([coral_binary, "source", "add", "--file", "github-source.yaml"], capture_output=True)
+
+
+def _subprocess_coral_execution(coral_binary: str, query: str, timeout: float) -> Dict[str, Any]:
+    """Helper to run coral via subprocess."""
+    cleaned_query = query.strip()
+    if not cleaned_query:
+        return {"status": "error", "message": "Empty query."}
+
+    cmd = [coral_binary, "sql", cleaned_query, "--format", "json"]
+    coral_env = {**os.environ}
+    if os.getenv("GITHUB_TOKEN"):
+        coral_env["GITHUB_TOKEN"] = os.getenv("GITHUB_TOKEN")
+
+    try:
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, timeout=timeout, shell=False, env=coral_env
+        )
+        if result.returncode != 0:
+            return {"status": "error", "message": result.stderr.strip()}
+        return {"status": "success", "data": json.loads(result.stdout), "count": len(json.loads(result.stdout))}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 def execute_coral_query(query: str, timeout: float = 30.0) -> Dict[str, Any]:
     """
-    Executes a federated Coral SQL query via local CLI subprocess execution.
+    Executes a federated Coral SQL query using the best available method.
+    
+    Execution priority:
+    1. MCP Client (persistent connection to coral mcp-stdio) — preferred
+    2. Subprocess (coral sql "<query>" --format json) — fallback
+    3. Mock engine — if Coral is not installed
     
     Args:
         query (str): The raw SQL query formulated by the SRE Brain.
-        timeout (float): Max execution time before subprocess termination.
+        timeout (float): Max execution time before termination.
         
     Returns:
-        Dict[str, Any]: Structured output. Contains 'status' ('success' or 'error'), 
-                        and either 'data' (JSON query results) or 'message' (error details).
+        Dict[str, Any]: Structured output with 'status', 'data', and 'count'.
     """
-    # If the query is targeting local parquet files or vulnerability datasets,
-    # the local CLI (which only has github registered) cannot execute it natively.
-    # Therefore, we automatically route it to our high-fidelity mock execution engine
-    # to guarantee a correct SRE response.
-    query_upper = query.upper()
-    is_local_or_osv = "READ(" in query_upper or "PARQUET" in query_upper or "OSV" in query_upper or "LOCAL_FILE" in query_upper
-
-    coral_binary = shutil.which("coral")
-    if not coral_binary or is_local_or_osv:
-        if is_local_or_osv:
-            logger.info("Query targets local logs or OSV database. Engaging high-fidelity mock engine.")
-        else:
-            logger.warning("Coral CLI binary 'coral' not found in PATH. Engaging mock dry-run mode.")
-        return _mock_coral_execution(query)
-
-    # 2. INPUT SANITIZATION
-    # Even with shell=False, we strip leading/trailing whitespace and control chars 
-    # to protect downstream JSON parsers.
-    cleaned_query = query.strip()
-    if not cleaned_query:
-        return {
-            "status": "error",
-            "message": "Empty query received. Unable to execute empty instruction."
-        }
-
-    # 3. CONSTRUCT COMMAND LIST
-    # Arguments must be isolated to prevent flags or CLI parameters from leaking.
-    # By separating arguments, 'coral' processes the string strictly as a query argument.
-    cmd = [coral_binary, "sql", cleaned_query, "--format", "json"]
-
-    logger.info(f"Executing Coral SQL: {cleaned_query} (Timeout: {timeout}s)")
-
-    try:
-        # 4. SUBPROCESS INVOKATION WITH ISOLATION
-        # - shell=False: Prevents shell expansion attacks.
-        # - stdout & stderr=PIPE: Redirects descriptors to memory, preventing pollution 
-        #   of the parent terminal console.
-        # - text=True: Decodes standard output bytes to UTF-8 dynamically.
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=timeout,
-            shell=False
-        )
-
-        # 5. DIAGNOSTICS & STATUS CHECK
-        # Coral CLI returns non-zero codes on syntax errors, missing tables, or resource exhaustion.
-        if result.returncode != 0:
-            logger.error(f"Coral CLI returned non-zero exit code {result.returncode}. Stderr: {result.stderr}")
-            return {
-                "status": "error",
-                "exit_code": result.returncode,
-                "message": result.stderr.strip() or f"Execution failed with code {result.returncode}"
-            }
-
-        # 6. JSON PARSING & PAYLOAD EXTRACTION
-        # Coral --format json delivers structured data. We deserialize it immediately.
-        # Deserializing on behalf of the agent reduces the token consumption because
-        # we can validate schema compliance and return clean python dicts.
+    # 1. TRY MCP (preferred path)
+    if HAS_MCP:
         try:
-            parsed_data = json.loads(result.stdout)
-            return {
-                "status": "success",
-                "data": parsed_data,
-                "count": len(parsed_data) if isinstance(parsed_data, list) else 1
-            }
-        except json.JSONDecodeError as jde:
-            logger.error(f"Failed to parse Coral JSON output. Raw stdout: {result.stdout}")
-            return {
-                "status": "error",
-                "message": f"Malformed CLI output. Unable to decode JSON. Error: {str(jde)}",
-                "raw_output": result.stdout.strip()
-            }
-
-    except subprocess.TimeoutExpired as te:
-        # Timeout safety valve triggered! Kill process and recover.
-        logger.error(f"Coral SQL query timed out after {timeout} seconds. Query: {cleaned_query}")
-        return {
-            "status": "error",
-            "message": f"Query execution timed out. Limit of {timeout}s exceeded. Avoid complex Cartesian JOINs without limits."
-        }
-    except Exception as e:
-        # Global fallback to prevent exceptions from propagating and crashing the Reflex UI thread.
-        logger.exception("Unexpected system failure during Coral execution.")
-        return {
-            "status": "error",
-            "message": f"Internal subprocess executor crash: {str(e)}"
-        }
+            logger.info(f"[MCP] Executing Coral SQL via MCP: {query[:120]}...")
+            client = get_mcp_client()
+            result = client.sql(query)
+            if result.get("status") == "success":
+                logger.info(f"[MCP] Query returned {result.get('count', 0)} rows.")
+                return result
+            else:
+                logger.warning(f"[MCP] Query returned error: {result.get('message')}. Falling back to subprocess.")
+        except Exception as e:
+            logger.warning(f"[MCP] MCP execution failed: {e}. Falling back to subprocess.")
+    
+    # 2. FALLBACK: Subprocess execution
+    coral_binary = shutil.which("coral")
+    
+    if coral_binary:
+        _init_coral_sources(coral_binary)
+        return _subprocess_coral_execution(coral_binary, query, timeout)
+    
+    # 3. LAST RESORT: Mock engine
+    logger.warning("Coral CLI not found. Engaging mock dry-run mode.")
+    return _mock_coral_execution(query)
 
 
 def _mock_coral_execution(query: str) -> Dict[str, Any]:
