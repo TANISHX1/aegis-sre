@@ -1,0 +1,31 @@
+{
+  "name": "Aegis SRE Remediation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aegis-sre-remediate",
+        "options": {}
+      },
+      "id": "e816a735-3b9c-4340-9a5c-54a23078cd5b",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        820,
+        360
+      ],
+      "webhookId": "a1b2c3d4-e5f6-7890-1234-56789abcdef0"
+    }
+  ],
+  "pinData": {},
+  "connections": {},
+  "active": true,
+  "settings": {},
+  "versionId": "f7d3a010-3c12-4212-b883-9b489d8f8a18",
+  "id": "1",
+  "meta": {
+    "instanceId": "8f031be07cf1c56f709121d58cf5f5c1d68a9b3604f32c38f972b2c86b620cb2"
+  },
+  "tags": []
+}
