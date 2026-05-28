@@ -58,6 +58,29 @@ except ImportError:
 from tools.coral_executor import execute_coral_query
 from tools.n8n_dispatcher import trigger_n8n_workflow
 
+from pydantic import BaseModel, Field
+
+class ThreatNode(BaseModel):
+    id: str = Field(description="Unique string ID of the node")
+    label: str = Field(description="Display label of the node")
+    x: int = Field(description="X coordinate between 50 and 260")
+    y: int = Field(description="Y coordinate between 50 and 260")
+    status: str = Field(description="Must be 'Healthy' or 'Degraded'")
+    vulnerable: str = Field(description="Vulnerability description or 'None'")
+    remediation: str = Field(description="Remediation steps")
+
+class ThreatEdge(BaseModel):
+    source: str = Field(description="Source node ID")
+    target: str = Field(description="Target node ID")
+
+def update_threat_topology(nodes: list[ThreatNode], edges: list[ThreatEdge]) -> dict:
+    """
+    Updates the visual Threat Topology graph on the dashboard with new microservice components.
+    """
+    nodes_dict = [n.model_dump() if hasattr(n, "model_dump") else n for n in nodes]
+    edges_dict = [e.model_dump() if hasattr(e, "model_dump") else e for e in edges]
+    return {"status": "success", "nodes": nodes_dict, "edges": edges_dict}
+
 # Initialize dotenv to load local secrets. override=True ensures .env values
 # always take precedence over stale shell-exported variables.
 load_dotenv(override=True)
@@ -71,9 +94,10 @@ logger = logging.getLogger("SREBrain")
 SYSTEM_PROMPT = """You are "Aegis-Antigravity SRE", an elite Zero-Warehouse root-cause investigation agent and Principal Systems Architect. 
 Your goal is to investigate production incidents, find root causes, and trigger automated remediations.
 
-You are equipped with two tools:
+You are equipped with three tools:
 1. `execute_coral_query`: Takes a raw SQL string to run on Coral and returns a JSON payload.
 2. `trigger_n8n_workflow`: Takes a JSON payload containing remediation details to execute an n8n workflow (e.g., alert Slack or create Jira tickets).
+3. `update_threat_topology`: Takes a list of nodes and edges to redraw the microservice topology graph on the UI when you discover the architecture of a new repository.
 
 ---
 ### FEDERATED CORAL DATABASE SCHEMA SPECIFICATION
@@ -168,6 +192,7 @@ LIMIT 20
 5. Construct queries targeting the root cause. Match vulnerabilities with recent commits.
 6. If you identify a critical issue, calculate the blast radius (which nodes/services are affected) and use `trigger_n8n_workflow` to dispatch the remediation automatically.
 7. Explain your technical reasoning step-by-step to the operator, including the exact SQL queries you formulated.
+8. If the user asks you to "map" or "analyze architecture" (or triggers a playbook for it), you MUST use the `update_threat_topology` tool to draw a visual representation of at least 4-5 distinct microservices/components related to the user's codebase. Use diverse X and Y coordinates (between 50 and 260) to spread nodes out visually. Connect them logically with edges.
 """
 
 # Define OpenAI raw tool schemas
@@ -218,6 +243,46 @@ OPENAI_TOOLS = [
                     }
                 },
                 "required": ["payload"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_threat_topology",
+            "description": "Updates the visual Threat Topology graph on the dashboard with new microservice components.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nodes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "label": {"type": "string"},
+                                "x": {"type": "integer"},
+                                "y": {"type": "integer"},
+                                "status": {"type": "string", "enum": ["Healthy", "Degraded"]},
+                                "vulnerable": {"type": "string"},
+                                "remediation": {"type": "string"}
+                            },
+                            "required": ["id", "label", "x", "y", "status", "vulnerable", "remediation"]
+                        }
+                    },
+                    "edges": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "source": {"type": "string"},
+                                "target": {"type": "string"}
+                            },
+                            "required": ["source", "target"]
+                        }
+                    }
+                },
+                "required": ["nodes", "edges"]
             }
         }
     }
@@ -378,6 +443,10 @@ class SREBrain:
                         payload_data = arguments.get("payload")
                         yield {"type": "status", "content": f"Dispatching remediation alert for service: {payload_data.get('service')}..."}
                         tool_result = trigger_n8n_workflow(payload_data)
+                    elif function_name == "update_threat_topology":
+                        nodes = arguments.get("nodes", [])
+                        edges = arguments.get("edges", [])
+                        tool_result = update_threat_topology(nodes, edges)
                     else:
                         tool_result = {"status": "error", "message": f"Unknown tool name: {function_name}"}
 
@@ -411,16 +480,24 @@ class SREBrain:
         """
         Coordinates the native Gemini GenAI SDK tool-calling loop.
         """
-        tools = [execute_coral_query, trigger_n8n_workflow]
+        tools = [execute_coral_query, trigger_n8n_workflow, update_threat_topology]
         yield {"type": "status", "content": "Initializing Google GenAI SRE Triage session..."}
         
         try:
+            # CRITICAL: Disable AFC (Automatic Function Calling). 
+            # When AFC is enabled, the SDK auto-executes tools internally and feeds results
+            # back to the model without yielding them to our generator loop. This means
+            # trigger_investigation() in aegis_app.py never sees the tool_result events 
+            # and can never update blast_radius_nodes or other UI state.
+            # By disabling AFC, we force all tool calls through our manual loop below,
+            # which properly yields tool_call/tool_result events to the UI handler.
             chat = self.client.chats.create(
                 model=self.model,
                 config=types.GenerateContentConfig(
                     system_instruction=self.system_prompt,
                     tools=tools,
                     temperature=0.1,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 )
             )
             
@@ -462,6 +539,10 @@ class SREBrain:
                         payload_data = args.get("payload")
                         yield {"type": "status", "content": f"Dispatching remediation alert for service: {payload_data.get('service')}..."}
                         tool_result = trigger_n8n_workflow(payload_data)
+                    elif name == "update_threat_topology":
+                        nodes = args.get("nodes", [])
+                        edges = args.get("edges", [])
+                        tool_result = update_threat_topology(nodes, edges)
                     else:
                         tool_result = {"status": "error", "message": f"Unknown tool name: {name}"}
                         
