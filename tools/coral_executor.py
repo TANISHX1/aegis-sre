@@ -29,11 +29,27 @@ import json
 import logging
 import shutil
 import subprocess
-from typing import Dict, Any, Union
+import os
+import asyncio
+from typing import Dict, Any, Union, Optional
 
 # Set up logging for audit trails - crucial for SRE forensics
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CoralExecutor")
+
+# ENFORCE SANDBOXED RUNTIME
+# This ensures that both the CLI executor and the backend daemon 
+# look at the same isolated '.aegis_sandbox' directory.
+ABS_SANDBOX_PATH = os.path.abspath("./.aegis_sandbox")
+os.environ["CORAL_CONFIG_DIR"] = ABS_SANDBOX_PATH
+
+# Optional MCP support (preferred path when available)
+try:
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
 
 
 class CoralExecutorError(Exception):
@@ -41,64 +57,56 @@ class CoralExecutorError(Exception):
     pass
 
 
-def execute_coral_query(query: str, timeout: float = 30.0) -> Dict[str, Any]:
+def execute_coral_query(query: str, timeout: float = 60.0) -> Dict[str, Any]:
     """
-    Executes a federated Coral SQL query via local CLI subprocess execution.
-    
-    Args:
-        query (str): The raw SQL query formulated by the SRE Brain.
-        timeout (float): Max execution time before subprocess termination.
-        
-    Returns:
-        Dict[str, Any]: Structured output. Contains 'status' ('success' or 'error'), 
-                        and either 'data' (JSON query results) or 'message' (error details).
+    Executes a federated Coral SQL query via MCP when available, otherwise
+    falls back to local CLI subprocess execution.
     """
-    # If the query is targeting local parquet files or vulnerability datasets,
-    # the local CLI (which only has github registered) cannot execute it natively.
-    # Therefore, we automatically route it to our high-fidelity mock execution engine
-    # to guarantee a correct SRE response.
-    query_upper = query.upper()
-    is_local_or_osv = "READ(" in query_upper or "PARQUET" in query_upper or "OSV" in query_upper or "LOCAL_FILE" in query_upper
-
+    # 1. RESOLVE CORAL BINARY
+    # We look for 'coral' in PATH, and specifically check Windows local bin if missing.
     coral_binary = shutil.which("coral")
-    if not coral_binary or is_local_or_osv:
-        if is_local_or_osv:
-            logger.info("Query targets local logs or OSV database. Engaging high-fidelity mock engine.")
-        else:
-            logger.warning("Coral CLI binary 'coral' not found in PATH. Engaging mock dry-run mode.")
+    if not coral_binary:
+        local_bin = os.path.expanduser("~/.local/bin/coral.exe")
+        if os.path.exists(local_bin):
+            coral_binary = local_bin
+    
+    if not coral_binary:
+        logger.warning("Coral CLI binary 'coral' not found. Engaging mock dry-run mode.")
         return _mock_coral_execution(query)
 
-    # 2. INPUT SANITIZATION
-    # Even with shell=False, we strip leading/trailing whitespace and control chars 
-    # to protect downstream JSON parsers.
+    # Sanitize and ensure config dir is set
     cleaned_query = query.strip()
     if not cleaned_query:
-        return {
-            "status": "error",
-            "message": "Empty query received. Unable to execute empty instruction."
-        }
+        return {"status": "error", "message": "Empty query."}
 
-    # 3. CONSTRUCT COMMAND LIST
-    # Arguments must be isolated to prevent flags or CLI parameters from leaking.
-    # By separating arguments, 'coral' processes the string strictly as a query argument.
+    # Set sandbox env for the subprocess
+    env = os.environ.copy()
+    env["CORAL_CONFIG_DIR"] = ABS_SANDBOX_PATH
+
+    # 2. PREFERRED MCP EXECUTION PATH
+    # When MCP is installed, we invoke Coral in MCP server mode and call the query tool.
+    if HAS_MCP:
+        mcp_result = _execute_coral_query_mcp(cleaned_query, env)
+        if mcp_result is not None:
+            return mcp_result
+
+    # 3. CLI FALLBACK PATH
+    # OSV queries and local_file.read() are now supported natively by our setup.
     cmd = [coral_binary, "sql", cleaned_query, "--format", "json"]
 
-    logger.info(f"Executing Coral SQL: {cleaned_query} (Timeout: {timeout}s)")
+    logger.info(f"Executing REAL Coral SQL: {cleaned_query}")
 
     try:
-        # 4. SUBPROCESS INVOKATION WITH ISOLATION
-        # - shell=False: Prevents shell expansion attacks.
-        # - stdout & stderr=PIPE: Redirects descriptors to memory, preventing pollution 
-        #   of the parent terminal console.
-        # - text=True: Decodes standard output bytes to UTF-8 dynamically.
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             timeout=timeout,
-            shell=False
+            shell=False,
+            env=env
         )
+
 
         # 5. DIAGNOSTICS & STATUS CHECK
         # Coral CLI returns non-zero codes on syntax errors, missing tables, or resource exhaustion.
@@ -143,6 +151,39 @@ def execute_coral_query(query: str, timeout: float = 30.0) -> Dict[str, Any]:
             "status": "error",
             "message": f"Internal subprocess executor crash: {str(e)}"
         }
+
+
+def _execute_coral_query_mcp(query: str, env: Dict[str, str]) -> Optional[Dict[str, Any]]:
+    """
+    Attempts to execute a Coral query via MCP. Returns None if MCP is unavailable
+    or if MCP execution fails (so the caller can fall back to CLI).
+    """
+    if not HAS_MCP:
+        return None
+
+    async def _run() -> Dict[str, Any]:
+        server_params = StdioServerParameters(
+            command="coral",
+            args=["mcp", "server"],
+            env=env,
+        )
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                results = await session.call_tool("query", {"sql": query})
+                return {"status": "success", "data": results}
+
+    try:
+        # If we're already inside a running event loop, avoid blocking and fall back to CLI.
+        try:
+            asyncio.get_running_loop()
+            logger.info("MCP detected active event loop; falling back to CLI to avoid blocking.")
+            return None
+        except RuntimeError:
+            return asyncio.run(_run())
+    except Exception as e:
+        logger.warning(f"MCP execution failed; falling back to CLI: {e}")
+        return None
 
 
 def _mock_coral_execution(query: str) -> Dict[str, Any]:

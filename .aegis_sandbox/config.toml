@@ -1,0 +1,19 @@
+version = 1
+
+[workspaces.default.sources.github]
+version = "0.1.0"
+variables = {}
+secrets = []
+origin = "imported"
+
+[workspaces.default.sources.logs]
+version = "0.1.0"
+variables = { LOGS_DIR = 'C:\Users\nagar\Desktop\progress\projects\aegis-sre\logs' }
+secrets = []
+origin = "imported"
+
+[workspaces.default.sources.osv]
+version = "0.1.0"
+variables = {}
+secrets = []
+origin = "imported"

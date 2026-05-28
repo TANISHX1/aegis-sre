@@ -79,25 +79,32 @@ You are equipped with two tools:
 
 You do not have a standard database warehouse. Instead, you query live data sources and offline logs directly on-the-fly using Coral SQL. You MUST write complex multi-hop JOINs combining these schemas when analyzing bugs:
 
-1. **Offline Server Logs**
-   - Syntax: `local_file.read('/logs/<filename>.parquet')` (e.g., `local_file.read('/logs/server.parquet')`)
+1. **Service Telemetry Logs (Local Parquet Files)**
+   - Namespace Table: `logs.telemetry`
    - Schema:
      * `timestamp` (TIMESTAMP): Event log time.
-     * `level` (VARCHAR): 'INFO', 'WARN', 'ERROR', 'CRITICAL'.
-     * `service` (VARCHAR): Service identifier (e.g., 'api-gateway', 'auth-service', 'payment-v2').
-     * `message` (VARCHAR): Log diagnostic string (e.g., 'vulnerability found', 'KeyExpired', 'jwt error').
-     * `ip` (VARCHAR): Source IP address.
-     * `request_path` (VARCHAR): HTTP endpoint path (e.g., '/auth/login', '/v1/transactions').
-     * `response_code` (INTEGER): HTTP status code (e.g., 500, 403, 200).
+     * `service` (VARCHAR): Service identifier (e.g., 'api-gateway', 'auth-service', 'payment-service').
+     * `ip` (VARCHAR): Source IP address of the node.
+     * `request_count` (INTEGER): Throughput.
+     * `error_count` (INTEGER): Number of failures.
+     * `vulnerable_package` (VARCHAR): Detected package string in format `name==version` (e.g., 'urllib3==1.26.15').
 
 2. **Google OSV API (Vulnerability Databases)**
    - Namespace Table: `osv.packages`
+   - Mandatory Filter: Must ALWAYS include `WHERE package_name = '...'` or `WHERE vulnerability_id = '...'` to trigger the API.
    - Schema:
-     * `package_name` (VARCHAR): Dependency library name (e.g., 'cryptography', 'urllib3', 'django').
-     * `installed_version` (VARCHAR): Installed version.
-     * `vulnerable_version_range` (VARCHAR): Ranges matching CVEs.
-     * `cve` (VARCHAR): Vulnerability identifier (e.g., 'CVE-2023-49083').
-     * `severity` (VARCHAR): 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'.
+     * `package_name` (VARCHAR): Core package name.
+     * `version` (VARCHAR): Specific version to check.
+     * `ecosystem` (VARCHAR): Ecosystem (e.g., 'PyPI', 'npm', 'Go', 'Maven').
+     * `vulnerability_id` (VARCHAR): Vulnerability identifier (e.g., 'GHSA-2xpw-w6gg-jr37').
+     * `summary` (VARCHAR): Brief description of the issue.
+
+### JOIN PATTERNS
+To audit a service, perform a JOIN between logs and OSV. Since `vulnerable_package` contains the version string, use literal filters for now when identifying package details. 
+
+Example Federated Audit Query:
+`SELECT l.ip, l.service, o.vulnerability_id, o.summary FROM logs.telemetry l JOIN osv.packages o ON o.package_name = 'urllib3' AND o.version = '1.26.15' WHERE l.vulnerable_package = 'urllib3==1.26.15' AND o.ecosystem = 'PyPI'`
+
      * `summary` (VARCHAR): Description of vulnerability.
 
 3. **VCS GitHub Commits**
@@ -115,13 +122,13 @@ You do not have a standard database warehouse. Instead, you query live data sour
 To find if a commit by TANISHX1 introduced a package vulnerability currently triggering 500 errors in offline logs, you MUST construct a query joining all three tables:
 ```sql
 SELECT 
-    l.timestamp, l.service, l.message,
-    o.package_name, o.installed_version, o.cve, o.severity,
+    l.timestamp, l.service, l.vulnerable_package,
+    o.vulnerability_id, o.summary,
     g.commit_hash, g.author, g.message AS commit_msg
-FROM local_file.read('/logs/server.parquet') l
-JOIN osv.packages o ON l.message LIKE CONCAT('%', o.package_name, '%')
-JOIN github.commits g ON g.changed_files LIKE CONCAT('%', o.package_name, '%')
-WHERE g.author = 'TANISHX1' AND l.response_code = 500
+FROM logs.telemetry l
+JOIN osv.packages o ON o.package_name = 'urllib3' AND o.version = '1.26.15'
+JOIN github.commits g ON g.changed_files LIKE '%requirements.txt%'
+WHERE g.author = 'TANISHX1' AND l.error_count > 100
 ORDER BY l.timestamp DESC
 ```
 

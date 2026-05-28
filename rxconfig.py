@@ -19,4 +19,5 @@ import reflex as rx
 
 config = rx.Config(
     app_name="aegis_app",
+    disable_plugins=["SitemapPlugin"],
 )

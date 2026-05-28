@@ -19,3 +19,6 @@ python-dotenv>=1.0.0
 
 # Next-generation Google GenAI Unified SDK
 google-genai>=0.1.1
+
+# Model Context Protocol (MCP) for native relational introspection
+mcp>=1.0.1

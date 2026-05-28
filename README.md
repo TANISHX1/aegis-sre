@@ -1,107 +1,107 @@
-# 🛡️ Aegis-Antigravity SRE
-### Zero-Warehouse Root-Cause Investigation & Cyber-Incident Remediation Agent
-*Developed for **Track 1** of the **"Pirates of the Coral-bean" Hackathon***
+# 🛡️ Aegis SRE: Ultimate Zero-Warehouse Investigator
+### Real-Time Forensic Federation for Production Outages
+*Developed for the **Pirates of the Coral-bean** Hackathon*
 
 ---
 
-![Aegis-Antigravity SRE Technical Architecture](assets/aegis_technical_architecture.png)
+Aegis SRE solves a massive real-world corporate crisis: dashboard fatigue and high Mean Time to Resolution (MTTR) during production outages. Instead of forcing engineers to cycle through separate browser tabs—manually correlating Sentry stack traces, GitHub deployment histories, Slack communication threads, and server infrastructure logs—Aegis acts as an intelligent, **Zero-Warehouse** shield.
 
-Aegis-Antigravity SRE is a next-generation, high-performance incident response platform built entirely in **pure Python** using the Reflex framework (Next.js/React compiled frontend + FastAPI backend). 
+## 🚀 Key Architectural Upgrades
 
-Operating on a **Zero-Warehouse** philosophy, Aegis enables cybersecurity teams to query, join, and inspect telemetric forensic logs (Parquet format) locally, cross-reference vulnerabilities in real-time, trace security leaks back to specific git committers (such as developer `TANISHX1`), and dispatch automated remediation protocols via resilient webhooks—**all without the overhead of heavy third-party datastores.**
+*   **Native MCP Introspection**: Operates as a Model Context Protocol client to give the AI agent native insight into relational schemas, discovered on-the-fly.
+*   **Micro-Sandboxing**: Enforces a strictly isolated environment via `CORAL_CONFIG_DIR`, keeping forensic configurations, logical caches, and credentials private.
+*   **Custom Bounty Sources**: Real-time integration with the Google OSV (Open Source Vulnerability) database via handmade YAML mapping specifications.
+*   **Asynchronous Forensic Loop**: Leverages Reflex's `@rx.background` decorator to run multi-hop investigations without freezing the user interface.
+*   **Interactive Blast Radius Mapping**: A dark-mode topology canvas mapping outage vectors instantly to specific rouge commits (e.g., from dev `TANISHX1`).
 
----
-
-## 🧭 System Architecture & Data Flow
-
-Aegis-Antigravity SRE utilizes a highly modular multi-hop cognitive layout where the agent orchestrates federated SQL log analysis, package vulnerability lookups, and webhook mitigation dispatches.
+## 🧭 System Architecture
 
 ```mermaid
 graph TD
     User["Operator Console (Reflex / Next.js)"] -->|Asks Question / Drops Parquet Log| State["State Management (aegis_app.py)"]
     State -->|Triggers Async Generator| Brain["SRE Brain (agent/sre_brain.py)"]
-    Brain -->|Step 1: Parse Logs & Schema| Executor["Coral CLI Executor (coral_executor.py)"]
-    Executor -->|Subprocess shell=False| Parquet["Telemetry Parquet Logs (/logs)"]
-    Parquet -->|Returns SQL JSON Payload| Executor
-    Executor -->|JSON Response| Brain
-    Brain -->|Step 2: Check Vulnerability Database| OSV["Google OSV API"]
-    OSV -->|Identifies CVE CVE-2023-43804| Brain
-    Brain -->|Step 3: Track Git Commit History| Git["Git Repository Commits (github.commits)"]
-    Git -->|Finds author TANISHX1| Brain
-    Brain -->|Step 4: Update UI Reactively| State
-    State -->|Update Nodes Status / Color / Glow| Visuals["Blast Radius Topology (SVG Grid)"]
-    Brain -->|Step 5: Dispatch Remediation Webhook| N8N["n8n Webhook Listener (Port 5678)"]
+    Brain -->|Step 1: Inspect Schema| MCP["Coral MCP Server"]
+    MCP -->|Deep Introspection| Brain
+    Brain -->|Step 2: Federated Query| Executor["Coral Logic Layer"]
+    Executor -->|JOIN Multi-Source| Data["Logs + OSV + Git"]
+    Data -->|JSON Forensics| Brain
+    Brain -->|Step 3: Update State| Visuals["Blast Radius Map (SVG)"]
+    Brain -->|Step 4: Decoupled Action| N8N["n8n Webhook Listener"]
 ```
 
----
-
-## ✨ Core Engineering Innovations
-
-### 1. Zero-Warehouse Federated Analytics (`tools/coral_executor.py`)
-* **Subprocess Sandboxing**: Executes `coral sql "<query>" --format json` on raw log files using `shell=False` parameters, fully preventing injection attacks.
-* **Resource Guarding**: Enforces strict `timeout=30.0` execution thresholds to cleanly terminate runaway Cartesian joins, eliminating CPU and thread starvation.
-* **Error Self-Correction**: Translates system/syntax errors into structured JSON output, giving the LLM brain the context it needs to self-correct and adjust SQL queries dynamically.
-
-### 2. Network-Resilient Webhook Dispatch (`tools/n8n_dispatcher.py`)
-* **Exponential Backoff**: Integrates `urllib3` retry adapters that absorb system packet loss, local network jitter, and webhook listener cold-starts (retries up to 3 times with backoffs: 1s, 2s, 4s).
-* **Resilient Timeouts**: Configures explicit connection (`3.05s`) and read (`10.0s`) split-timeouts to prevent slow remote receivers from locking the primary server.
-
-### 3. Asynchronous Cognitive Loop (`agent/sre_brain.py`)
-* **Multi-Hop Schema Joints**: Prompts guide the agent through multi-stage federated SQL joins spanning telemetry tables, git commits, and Google's OSV vulnerability records.
-* **Dynamic Gen-Streaming**: Leverages Python async generators to stream intermediate thoughts and active tool calls to the client in real-time, giving operators complete transparency during multi-step tracing.
-
-### 4. High-Fidelity Cyber-Incident Dashboard (`aegis_app/aegis_app.py`)
-* **Pure Python Reactive UI**: Implements Next.js-compiled frontend reactive controls without writing a single line of JavaScript. Uses WebSocket state syncs for smooth interactions.
-* **Neon Blast Radius Topology**: A custom visual SVG map renders compromise vectors at 60fps. Tapping nodes dynamically highlights vulnerability cards (such as urllib3 CVE commits) and outputs isolated rollback commands.
-
----
-
-## 📂 Project Blueprint
-
-The workspace is organized into highly specialized modules:
+## 🛠️ Project Structure
 
 ```
-aegis-antigravity-sre/
-├── requirements.txt                   # Pin-pointed Python system package declarations
-├── rxconfig.py                        # Reflex project compilation and app configuration
-├── test_runner.py                     # Command-line integration test-runner (dry-run ready)
-├── README.md                          # Comprehensive user and architectural manual
-├── logs/                              # Directory holding local forensic logs (e.g. Parquet files)
-├── assets/
-│   └── aegis_technical_architecture.png # Premium high-fidelity Unreal Engine style technical dataflow graphic
+aegis-sre/
+├── backend/
+│   ├── specs/                # Custom Source Mapping Specifications (osv.yaml)
+│   ├── logs/                 # Active forensic log stream
+│   ├── setup_aegis.sh        # Isolated sandbox initialization script
+│   └── aegis_core.py         # Native MCP Client & Background Engine
 ├── tools/
-│   ├── __init__.py                    # Utilities package exports
-│   ├── coral_executor.py              # Secure subprocess Coral CLI runner
-│   └── n8n_dispatcher.py              # Resilient HTTP webhook dispatch adapter
+│   ├── coral_executor.py     # Sandboxed SQL Logic Layer
+│   └── n8n_dispatcher.py     # Resilient remediation dispatcher
 ├── agent/
-│   ├── __init__.py                    # Core agent package exports
-│   └── sre_brain.py                   # Async OpenAI cognitive brain and tool bindings
+│   └── sre_brain.py          # Principal SRE reasoning agent
 └── aegis_app/
-    ├── __init__.py                    # Reflex UI application exports
-    └── aegis_app.py                   # Dynamic dashboard, SVG reactive map, State handlers
+    └── aegis_app.py          # Reactive Python Web Dashboard
+```
+
+## 🏁 Quick Start
+
+### 1. Prerequisites
+- **Coral CLI**: Install from [withcoral.com](https://withcoral.com)
+- **Python 3.10+**: `pip install -r requirements.txt`
+
+### 2. Sandbox Setup (Isolated Forensic Environment)
+Initialize the sandboxed environment and register the federated data sources (OSV API + Local Logs):
+```powershell
+.\backend\setup_aegis.ps1
+```
+
+### 3. Generate Forensic Logs
+Bootstraps the system with realistic telemetry parquet files in `./logs/`:
+```bash
+python scratch/generate_mock_parquet.py
+```
+
+### 4. Launch the Dashboard
+Start the Reflex web application:
+```bash
+reflex run
 ```
 
 ---
 
-## 🚀 Setting Up the Environment
+## 🛠️ Project Structure
+... (existing structure) ...
 
-### 1. Ingest Python Dependencies
-Initialize a dedicated virtual environment in Fedora or Linux and load the system packages:
-```bash
-# Create local virtualenv to isolate libraries
-python3 -m venv venv
-source venv/bin/activate
+1.  **Initialize Virtualenv**:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
 
-# Installpinned system manifest
-pip install -r requirements.txt
-```
+2.  **Spin Up Infrastructure**:
+    ```bash
+    docker compose up -d
+    ```
 
-### 2. Define Environment Config
-Create a `.env` file in the root of the project to specify your connection credentials:
+3.  **Boot the Sandbox**:
+    ```bash
+    chmod +x backend/setup_aegis.sh
+    ./backend/setup_aegis.sh
+    ```
+
+4.  **Launch the Dashboard**:
+    ```bash
+    reflex run
+    ```
 ```ini
 OPENAI_API_KEY=your-openai-api-key-here
 SRE_LLM_MODEL=gpt-4o
-N8N_WEBHOOK_URL=http://localhost:5678/webhook/aegis-sre-remediate
+N8N_WEBHOOK_URL=http://localhost:5678/webhook/aegis-triage
 ```
 > [!NOTE]
 > If `OPENAI_API_KEY` is omitted, the SRE Brain automatically engages **Simulated Mock Mode**. It will generate mock SQL responses, trace vulnerability CVEs, and dispatch fake webhook responses, making it perfect for dry-run setups!
@@ -113,7 +113,7 @@ python3 test_runner.py
 ```
 
 ### 4. Launch the Web Application
-Start both the React/Next.js frontend and the FastAPI backend server with one command:
+Start the Reflex web application (Python backend + Next.js frontend generated by Reflex):
 ```bash
 # Compile and bootstrap the dev environment
 reflex run

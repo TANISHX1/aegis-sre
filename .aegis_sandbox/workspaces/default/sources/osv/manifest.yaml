@@ -1,0 +1,65 @@
+# osv.yaml: Google Open Source Vulnerability Tracker Engine API mapping
+# Matching Coral DSL v3 schema for direct HTTP backend.
+
+name: osv
+version: 0.1.0
+dsl_version: 3
+backend: http
+description: >-
+  Query Google OSV vulnerability records by package version, commit hash, or
+  vulnerability ID from the OSV API.
+base_url: https://api.osv.dev
+test_queries:
+  - SELECT * FROM osv.packages WHERE package_name = 'lodash' AND ecosystem = 'npm' LIMIT 1
+tables:
+  - name: packages
+    description: Query vulnerabilities by package name, ecosystem, and version.
+    filters:
+      - name: package_name
+        required: true
+      - name: ecosystem
+      - name: version
+    request:
+      method: POST
+      path: /v1/query
+      body:
+        - path: [package, name]
+          from: filter
+          key: package_name
+        - path: [package, ecosystem]
+          from: filter
+          key: ecosystem
+        - path: [version]
+          from: filter
+          key: version
+    response:
+      rows_path: [vulns]
+    columns:
+      - name: package_name
+        type: Utf8
+        description: Package name
+        expr:
+          kind: path
+          path: [package, name]
+      - name: vulnerability_id
+        type: Utf8
+        description: Vulnerability ID
+        expr:
+          kind: path
+          path: [id]
+      - name: summary
+        type: Utf8
+        description: Summary
+        expr:
+          kind: path
+          path: [summary]
+      - name: ecosystem
+        type: Utf8
+        expr: { kind: path, path: [package, ecosystem] }
+      - name: version
+        type: Utf8
+        expr: { kind: path, path: [version] }
+
+
+
+

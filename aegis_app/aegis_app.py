@@ -125,68 +125,65 @@ class State(rx.State):
     }
 
     # 6. ASYNC CORE INVESTIGATION LOOP
+    @rx.event(background=True)
     async def trigger_investigation(self):
         """
         Launches SRE Brain async reasoning.
-        Iterates over the agent's thoughts and tool actions, yielding them continuously to 
-        prevent Next.js socket timeouts and keep the UI reactive.
+        Wrapped in @rx.event(background=True) to prevent blocking the Reflex event loop.
         """
         if not self.current_question.strip():
             return
             
-        self.is_investigating = True
-        # Clear logs to focus on current trace session
-        self.agent_thought_log = [f"System: Starting investigation sequence for: '{self.current_question}'"]
-        yield # Force UI refresh to render loading states
-
-        # Instantiating SREBrain. Done inside the method so it refreshes environmental variables (e.g. keys) dynamically.
+        async with self:
+            self.is_investigating = True
+            # Clear logs to focus on current trace session
+            self.agent_thought_log = [f"System: Starting investigation sequence for: '{self.current_question}'"]
+        
+        # Instantiating SREBrain
         brain = SREBrain()
         
         # Compile chat history to match raw OpenAI message structures.
         history_buffer = []
-        # Take last 6 turns to keep context window tight, reducing token consumption.
-        for turn in self.chat_history[-6:]:
-            history_buffer.append({"role": turn["role"], "content": turn["content"]})
-            
+        async with self:
+            for turn in self.chat_history[-6:]:
+                history_buffer.append({"role": turn["role"], "content": turn["content"]})
+            current_q = self.current_question
+
         # Run SRE agent generator loop
         try:
-            # We fetch thoughts via generator to print intermediate diagnostics to the operator.
-            for step in brain.run_investigation_loop(self.current_question, history_buffer):
-                step_type = step.get("type")
-                
-                if step_type == "status":
-                    self.agent_thought_log.append(f"🔄 {step.get('content')}")
-                elif step_type == "thought":
-                    self.agent_thought_log.append(f"🧠 {step.get('content')}")
-                elif step_type == "tool_call":
-                    tool_name = step.get("tool_name")
-                    args = step.get("arguments", {})
-                    self.agent_thought_log.append(f"🛠️ Tool Call: {tool_name} with params -> {args}")
-                elif step_type == "tool_result":
-                    tool_name = step.get("tool_name")
-                    result = step.get("result", {})
-                    self.agent_thought_log.append(f"✅ Tool {tool_name} returned status: {result.get('status')}")
+            for step in brain.run_investigation_loop(current_q, history_buffer):
+                async with self:
+                    step_type = step.get("type")
                     
-                    # Dynamically update the blast radius or SVG topology based on Coral execution outputs!
-                    if tool_name == "execute_coral_query" and result.get("status") == "success":
-                        self._parse_query_impact(result.get("data", []))
-                elif step_type == "final":
-                    self.chat_history.append({"role": "user", "content": self.current_question})
-                    self.chat_history.append({"role": "assistant", "content": step.get("content", "")})
-                    self.current_question = ""
-                elif step_type == "error":
-                    self.agent_thought_log.append(f"❌ Error: {step.get('content')}")
-                    self.chat_history.append({"role": "assistant", "content": f"⚠️ SRE Brain encountered an execution block: {step.get('content')}"})
-                
-                # Push state delta updates to the Reflex websocket immediately
-                yield
+                    if step_type == "status":
+                        self.agent_thought_log.append(f"🔄 {step.get('content')}")
+                    elif step_type == "thought":
+                        self.agent_thought_log.append(f"🧠 {step.get('content')}")
+                    elif step_type == "tool_call":
+                        tool_name = step.get("tool_name")
+                        args = step.get("arguments", {})
+                        self.agent_thought_log.append(f"🛠️ Tool Call: {tool_name} with params -> {args}")
+                    elif step_type == "tool_result":
+                        tool_name = step.get("tool_name")
+                        result = step.get("result", {})
+                        self.agent_thought_log.append(f"✅ Tool {tool_name} returned status: {result.get('status')}")
+                        
+                        if tool_name == "execute_coral_query" and result.get("status") == "success":
+                            self._parse_query_impact(result.get("data", []))
+                    elif step_type == "final":
+                        self.chat_history.append({"role": "user", "content": current_q})
+                        self.chat_history.append({"role": "assistant", "content": step.get("content", "")})
+                        self.current_question = ""
+                    elif step_type == "error":
+                        self.agent_thought_log.append(f"❌ Error: {step.get('content')}")
+                        self.chat_history.append({"role": "assistant", "content": f"⚠️ SRE Brain encountered an execution block: {step.get('content')}"})
                 
         except Exception as e:
-            self.agent_thought_log.append(f"❌ Fatal crash in SRE brain loop: {str(e)}")
-            yield
+            async with self:
+                self.agent_thought_log.append(f"❌ Fatal crash in SRE brain loop: {str(e)}")
             
-        self.is_investigating = False
-        yield
+        async with self:
+            self.is_investigating = False
 
     def select_node(self, node_id: str):
         """
@@ -217,13 +214,17 @@ class State(rx.State):
         Secures and saves uploaded Parquet files to the local /logs directory.
         Allows the Zero-Warehouse Coral engine to read and analyze them instantly.
         """
-        # Resolve target directory relative to current directory
-        project_root = "/home/blazex/Documents/git/aegis-antigravity-sre"
+        # Dynamically calculate the logs directory based on the current workspace
+        project_root = os.getcwd()
         logs_dir = os.path.join(project_root, "logs")
+        # Reflex managed upload directory (used for UI-managed temp storage)
+        upload_dir = rx.get_upload_dir()
         
         # Safe directory initialization
         if not os.path.exists(logs_dir):
             os.makedirs(logs_dir)
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
             
         for file in files:
             file_bytes = await file.read()
@@ -236,15 +237,20 @@ class State(rx.State):
                 continue
 
             target_path = os.path.join(logs_dir, safe_name)
+            upload_path = os.path.join(upload_dir, safe_name)
             
-            # Secure file IO operation
+            # Secure file IO operation (mirror into both locations)
+            with open(upload_path, "wb") as f:
+                f.write(file_bytes)
             with open(target_path, "wb") as f:
                 f.write(file_bytes)
                 
             if safe_name not in self.uploaded_logs:
                 self.uploaded_logs.append(safe_name)
                 
-            self.agent_thought_log.append(f"📁 Forensic Log mounted: {safe_name} -> Available inside Coral as local_file.read('/logs/{safe_name}')")
+            self.agent_thought_log.append(
+                f"📁 Forensic Log mounted: {safe_name} -> Uploads: {upload_path} | Coral: local_file.read('/logs/{safe_name}')"
+            )
 
     def run_predefined_playbook(self, prompt: str):
         """

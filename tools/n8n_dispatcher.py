@@ -39,7 +39,7 @@ logger = logging.getLogger("N8NDispatcher")
 # Default local webhook configuration.
 # Why? Local n8n instances usually bind to port 5678. Webhook nodes are prefixed with /webhook-test or /webhook.
 # Using environment variables allows zero-code changes when moving from local dev to a production container.
-DEFAULT_N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/aegis-sre-remediate")
+DEFAULT_N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/aegis-triage")
 
 
 class N8NDispatcherError(Exception):

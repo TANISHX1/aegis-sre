@@ -1,0 +1,25 @@
+# github.yaml: Mock Git Commit History source for Aegis SRE
+name: github
+version: 0.1.0
+dsl_version: 3
+backend: file
+tables:
+  - name: commits
+    description: Git commit history logs.
+    format: parquet
+    source:
+      location: file:///C:/Users/nagar/Desktop/progress/projects/aegis-sre/logs/
+      glob: "github_commits.parquet"
+    columns:
+      - name: commit_hash
+        type: Utf8
+      - name: author
+        type: Utf8
+      - name: commit_date
+        type: Utf8
+      - name: message
+        type: Utf8
+      - name: changed_files
+        type: Utf8
+
+

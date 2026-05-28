@@ -1,0 +1,33 @@
+# logs.yaml: Local Parquet logs manifest for Aegis SRE
+name: logs
+version: 0.1.0
+dsl_version: 3
+backend: file
+inputs:
+  LOGS_DIR:
+    kind: variable
+    hint: Absolute path to the logs directory.
+test_queries:
+  - SELECT * FROM logs.telemetry LIMIT 1
+tables:
+  - name: telemetry
+    description: Server telemetry logs harvested from production.
+    format: parquet
+    source:
+      location: file:///C:/Users/nagar/Desktop/progress/projects/aegis-sre/logs/
+      glob: "*.parquet"
+    columns:
+      - name: timestamp
+        type: Utf8
+      - name: service
+        type: Utf8
+      - name: ip
+        type: Utf8
+      - name: request_count
+        type: Int64
+      - name: error_count
+        type: Int64
+      - name: vulnerable_package
+        type: Utf8
+
+
