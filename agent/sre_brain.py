@@ -1,7 +1,7 @@
 """
-Aegis-Antigravity SRE: Cognitive AI Brain & Tool Coordinator
+Aegis-Antigravity: Cognitive AI Brain & Tool Coordinator
 ------------------------------------------------------------
-This module acts as the Principal SRE reasoning agent, integrating raw OpenAI API calls 
+This module acts as the Principal reasoning agent, integrating raw OpenAI API calls 
 with functional tools. It bypasses framework wrappers like LangChain to preserve raw control
 over token consumption, latency, and function routing.
 
@@ -91,7 +91,7 @@ logger = logging.getLogger("SREBrain")
 # Configure the System Prompt containing the federated architecture instructions.
 # Why? Explicit schema definitions and join patterns are supplied inside the system prompt 
 # to optimize zero-shot SQL generation accuracy and instruct the model on TANISHX1's git author context.
-SYSTEM_PROMPT = """You are "Aegis-Antigravity SRE", an elite Zero-Warehouse root-cause investigation agent and Principal Systems Architect. 
+SYSTEM_PROMPT = """You are "Aegis-Antigravity", an elite Zero-Warehouse root-cause investigation agent and Principal Systems Architect. 
 Your goal is to investigate production incidents, find root causes, and trigger automated remediations.
 
 You are equipped with three tools:
@@ -633,12 +633,11 @@ class SREBrain:
         # 4. Stream final report
         yield {
             "type": "final",
-            "content": """### Root Cause Analysis & Forensic Summary: Aegis-Antigravity SRE
-
-1. **Root Cause**: The production crash was triggered by a high-severity cookie-leak vulnerability in **urllib3** (`CVE-2023-43804`). This vulnerability was committed by developer **TANISHX1** in commit `a5d89f3` while refactoring dependencies.
-2. **Blast Radius**: The issue has degraded **api-gateway** and **auth-service**, generating `500 Server Error` response codes across 12% of traffic.
-3. **Triggered Actions**:
-   * An n8n workflow was successfully launched to quarantine the node.
-   * Slack alerts and incident tickets have been dispatched to the on-call SRE queue.
-   * Scheduled dependency upgrade tasks to force-install `urllib3==1.26.18` have been registered."""
+            "content": """### Root Cause Analysis & Forensic Summary: Aegis-Antigravity
+*   **Root Cause**: The production crash was triggered by a high-severity cookie-leak vulnerability in **urllib3** (`CVE-2023-43804`). This vulnerability was committed by developer **TANISHX1** in commit `a5d89f3` while refactoring dependencies.
+*   **Blast Radius**: The issue has degraded **api-gateway** and **auth-service**, generating `500 Server Error` response codes across 12% of traffic.
+*   **Triggered Actions**:
+    * An n8n workflow was successfully launched to quarantine the node.
+    * Slack alerts and incident tickets have been dispatched to the on-call queue.
+    * Scheduled dependency upgrade tasks to force-install `urllib3==1.26.18` have been registered."""
         }

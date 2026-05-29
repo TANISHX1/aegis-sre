@@ -1,5 +1,5 @@
 """
-Aegis-Antigravity SRE: n8n Workflow Dispatcher Engine
+Aegis-Antigravity: n8n Workflow Dispatcher Engine
 -----------------------------------------------------
 This module coordinates SRE remediation notifications and automated recovery 
 by firing webhooks to a local webhook receiver or n8n automation flow.
@@ -98,7 +98,7 @@ def trigger_n8n_workflow(payload: dict, webhook_url: str = DEFAULT_N8N_WEBHOOK_U
             "root_cause": payload.get("root_cause", "Undetermined"),
             "blast_radius_nodes": payload.get("blast_radius_nodes", []),
             "remediation_action": payload.get("remediation_action", "No action specified"),
-            "triggered_by": "Aegis-Antigravity SRE Core Agent (Standalone)",
+            "triggered_by": "Aegis-Antigravity Core Agent (Standalone)",
             "raw_forensics": payload.get("raw_forensics", {})
         }
         return {
@@ -144,7 +144,7 @@ def trigger_n8n_workflow(payload: dict, webhook_url: str = DEFAULT_N8N_WEBHOOK_U
         "root_cause": payload.get("root_cause", "Undetermined"),
         "blast_radius_nodes": payload.get("blast_radius_nodes", []),
         "remediation_action": payload.get("remediation_action", "No action specified"),
-        "triggered_by": "Aegis-Antigravity SRE Core Agent",
+        "triggered_by": "Aegis-Antigravity Core Agent",
         "raw_forensics": payload.get("raw_forensics", {})
     }
 

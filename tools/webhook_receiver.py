@@ -1,5 +1,5 @@
 """
-Aegis-Antigravity SRE: Local Webhook Receiver (n8n Replacement)
+Aegis-Antigravity: Local Webhook Receiver (n8n Replacement)
 ---------------------------------------------------------------
 A lightweight Flask-like webhook server that replaces n8n for environments 
 where Docker is unavailable. It receives SRE incident payloads, logs them 

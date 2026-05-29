@@ -1,5 +1,5 @@
 """
-Aegis-Antigravity SRE: Reflex Compiler Configuration
+Aegis-Antigravity: Reflex Compiler Configuration
 -----------------------------------------------------
 This configuration file instructs the Reflex compiler engine how to bootstrap
 and bundle the project application workspace.

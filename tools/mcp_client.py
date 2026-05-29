@@ -1,5 +1,5 @@
 """
-Aegis-Antigravity SRE: Coral MCP Client
+Aegis-Antigravity: Coral MCP Client
 ----------------------------------------
 A lightweight Model Context Protocol (MCP) client that communicates with Coral's
 built-in MCP server (`coral mcp-stdio`) via JSON-RPC 2.0 over stdin/stdout.

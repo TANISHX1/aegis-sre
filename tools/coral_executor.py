@@ -1,5 +1,5 @@
 """
-Aegis-Antigravity SRE: Coral Query Executor Engine
+Aegis-Antigravity: Coral Query Executor Engine
 ---------------------------------------------------
 This module implements the execution wrapper for Coral, using the Model Context
 Protocol (MCP) as the primary data access layer.

@@ -1,6 +1,6 @@
 # 🚀 Aegis-SRE Demo Walkthrough
 
-Welcome to the **Aegis-Antigravity SRE** demo! This document outlines the "Golden Path" script to showcase the capabilities of the agent for the hackathon.
+Welcome to the **Aegis-Antigravity** demo! This document outlines the "Golden Path" script to showcase the capabilities of the agent for the hackathon.
 
 ## 1. Environment Setup
 

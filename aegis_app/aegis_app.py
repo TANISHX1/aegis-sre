@@ -1,8 +1,8 @@
 """
-Aegis-Antigravity SRE: Pure Python Reactive Command Dashboard
+Aegis-Antigravity: Pure Python Reactive Command Dashboard
 -------------------------------------------------------------
 This is the core Reflex UI module. It binds the state management, the SVG visual 
-node threat graph, file upload forensic workflows, and the SRE cognitive brain 
+node threat graph, file upload forensic workflows, and the cognitive brain 
 into a unified, glassmorphic dark-themed command panel.
 
 CRITICAL ARCHITECTURAL DESIGN CHOICES & RATIONALE (THE "WHY"):
@@ -69,11 +69,15 @@ class State(rx.State):
     cognitive logs from the agent brain, and the dynamic reactive SVG topology calculations.
     """
     
+    # 0. Landing Page Gate
+    show_landing: bool = True
+    landing_exiting: bool = False
+
     # 1. Chat Logs Container
     chat_history: List[Dict[str, str]] = [
         {
             "role": "assistant",
-            "content": "👋 **Aegis-Antigravity Core Online**. I am your Zero-Warehouse SRE Agent. Drop `.parquet` files in the sidebar and trigger an investigation. I will join local telemetry logs with vulnerability databases and GitHub records to isolate root causes."
+            "content": "👋 **Aegis-Antigravity Core Online**. I am your Zero-Warehouse Autonomous Agent. Drop `.parquet` files in the sidebar and trigger an investigation. I will join local telemetry logs with vulnerability databases and GitHub records to isolate root causes."
         }
     ]
     
@@ -83,7 +87,7 @@ class State(rx.State):
     
     # 3. Agent Cognitive Thought Logs (Displayed as real-time terminal output)
     agent_thought_log: List[str] = [
-        "System: Initializing SRE Brain context...",
+        "System: Initializing Aegis Brain context...",
         "System: Awaiting telemetry logs upload or manual forensic instruction."
     ]
     
@@ -100,7 +104,7 @@ class State(rx.State):
         {"id": "payment-sys", "label": "Payment Sys", "x": 260, "y": 150, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
         {"id": "worker-queue", "label": "Celery Workers", "x": 260, "y": 250, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
     ] if os.environ.get("DEMO_MODE", "true").lower() == "true" else [
-        {"id": "core-hub", "label": "Scanning Architecture...", "x": 170, "y": 150, "status": "Healthy", "vulnerable": "None", "remediation": "Awaiting SRE Agent analysis."}
+        {"id": "core-hub", "label": "Scanning Architecture...", "x": 170, "y": 150, "status": "Healthy", "vulnerable": "None", "remediation": "Awaiting Aegis Agent analysis."}
     ]
 
     blast_radius_edges: List[Dict[str, str]] = [
@@ -159,11 +163,19 @@ class State(rx.State):
     def toggle_playbooks(self):
         self.show_playbooks = not self.show_playbooks
 
+    async def enter_dashboard(self):
+        """Animated transition: fade out landing, then reveal the main dashboard."""
+        self.landing_exiting = True
+        yield
+        await asyncio.sleep(0.6)  # Wait for CSS exit animation
+        self.show_landing = False
+        self.landing_exiting = False
+
     # 6. ASYNC CORE INVESTIGATION LOOP
     @rx.event(background=True)
     async def trigger_investigation(self):
         """
-        Launches SRE Brain async reasoning.
+        Launches Aegis Brain async reasoning.
         Iterates over the agent's thoughts and tool actions, yielding them continuously to 
         prevent Next.js socket timeouts and keep the UI reactive.
         """
@@ -184,7 +196,7 @@ class State(rx.State):
         # Instantiating SREBrain. Done inside the method so it refreshes environmental variables (e.g. keys) dynamically.
         brain = SREBrain()
             
-        # Run SRE agent generator loop
+        # Run Aegis agent generator loop
         try:
             # We fetch thoughts via generator to print intermediate diagnostics to the operator.
             for step in brain.run_investigation_loop(current_q, history_buffer):
@@ -220,14 +232,14 @@ class State(rx.State):
                         self.current_question = ""
                     elif step_type == "error":
                         self.agent_thought_log.append(f"❌ Error: {step.get('content')}")
-                        self.chat_history.append({"role": "assistant", "content": f"⚠️ SRE Brain encountered an execution block: {step.get('content')}"})
+                        self.chat_history.append({"role": "assistant", "content": f"⚠️ Aegis Brain encountered an execution block: {step.get('content')}"})
                 
                 # Push state delta updates to the Reflex websocket immediately
                 yield
                 
         except Exception as e:
             async with self:
-                self.agent_thought_log.append(f"❌ Fatal crash in SRE brain loop: {str(e)}")
+                self.agent_thought_log.append(f"❌ Fatal crash in Aegis brain loop: {str(e)}")
             yield
             
         async with self:
@@ -584,7 +596,7 @@ def header() -> rx.Component:
                 style={"filter": "drop-shadow(0 0 8px #FF6F61)"}
             ),
             rx.vstack(
-                rx.heading("AEGIS-ANTIGRAVITY SRE", size="5", color="white", font_family="Inter", font_weight="700"),
+                rx.heading("AEGIS-ANTIGRAVITY", size="5", color="white", font_family="Inter", font_weight="700"),
                 rx.text("Zero-Warehouse Federated Forensics", size="1", color="rgba(255, 255, 255, 0.5)", font_family="Inter"),
                 spacing="0"
             ),
@@ -659,7 +671,7 @@ def integrations_dialog() -> rx.Component:
                         
                         rx.divider(margin_y="10px"),
                         rx.text("2. Target Repository Scope:", size="2", font_weight="bold"),
-                        rx.text("All SRE workings will use this default repository unless overridden in the prompt.", size="1", color="gray"),
+                        rx.text("All workings will use this default repository unless overridden in the prompt.", size="1", color="gray"),
                         rx.hstack(
                             rx.input(placeholder="Username (e.g. TANISHX1)", on_change=State.set_github_owner, width="50%"),
                             rx.input(placeholder="Repository (e.g. seat-allocation-sys)", on_change=State.set_github_repo_name, width="50%"),
@@ -887,7 +899,7 @@ def chat_console() -> rx.Component:
                         rx.vstack(
                             rx.hstack(
                                 rx.text(
-                                    rx.cond(msg["role"] == "user", "👤 SRE OPERATOR", "🛡️ AEGIS AGENT"),
+                                    rx.cond(msg["role"] == "user", "👤 OPERATOR", "🛡️ AEGIS AGENT"),
                                     font_size="10px",
                                     font_weight="700",
                                     font_family="JetBrains Mono",
@@ -1179,15 +1191,516 @@ def threat_intelligence() -> rx.Component:
     )
 
 
-def index() -> rx.Component:
+# ==========================================
+# LANDING PAGE (FUI Gate)
+# ==========================================
+
+def landing_data_stream() -> rx.Component:
+    """Decorative scrolling code text for the landing page sides."""
+    code_lines = (
+        "import aegis.core.forensics\n"
+        "from sre_brain import SREBrain\n"
+        "coral.execute(query='SELECT * FROM github.commits')\n"
+        "topology.update_nodes(scan_repo=True)\n"
+        "brain.run_investigation_loop(prompt, history)\n"
+        "for step in brain.run_gemini_native_loop(q):\n"
+        "    yield {'type': 'tool_result', ...}\n"
+        "blast_radius.compute_edges(node_map)\n"
+        "n8n.trigger_workflow(payload={'service': 'api'})\n"
+        "osv.scan_dependencies(lockfile='poetry.lock')\n"
+        "forensics.upload_parquet(sandbox='/logs')\n"
+        "graph.render_svg(viewbox=state.svg_view_box)\n"
+        "state.agent_thought_log.append('🛡️ Scan complete')\n"
+        "telemetry.stream(protocol='websocket', fps=60)\n"
+    )
+    return rx.el.div(
+        rx.text(code_lines * 4, white_space="pre", font_size="10px", line_height="1.7"),
+        class_name="data-stream",
+        position="absolute",
+        height="200%",
+        width="200px",
+        overflow="hidden",
+        pointer_events="none",
+        user_select="none"
+    )
+
+
+def landing_data_stream() -> rx.Component:
+    """Decorative scrolling code text for the landing page sides."""
+    code_lines = (
+        "import aegis.core.forensics\n"
+        "from sre_brain import SREBrain\n"
+        "coral.execute(query='SELECT * FROM github.commits')\n"
+        "topology.update_nodes(scan_repo=True)\n"
+        "brain.run_investigation_loop(prompt, history)\n"
+        "for step in brain.run_gemini_native_loop(q):\n"
+        "    yield {'type': 'tool_result', ...}\n"
+        "blast_radius.compute_edges(node_map)\n"
+        "n8n.trigger_workflow(payload={'service': 'api'})\n"
+        "osv.scan_dependencies(lockfile='poetry.lock')\n"
+        "forensics.upload_parquet(sandbox='/logs')\n"
+        "graph.render_svg(viewbox=state.svg_view_box)\n"
+        "state.agent_thought_log.append('🛡️ Scan complete')\n"
+        "telemetry.stream(protocol='websocket', fps=60)\n"
+    )
+    return rx.el.div(
+        rx.text(code_lines * 4, white_space="pre", font_size="10px", line_height="1.7"),
+        class_name="data-stream",
+        position="absolute",
+        height="200%",
+        width="200px",
+        overflow="hidden",
+        pointer_events="none",
+        user_select="none"
+    )
+
+
+def parquet_visual_mock() -> rx.Component:
+    """Mock terminal visual displaying Parquet log schema loading."""
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.box(width="8px", height="8px", border_radius="50%", background_color="#ff5f56"),
+                rx.box(width="8px", height="8px", border_radius="50%", background_color="#ffbd2e"),
+                rx.box(width="8px", height="8px", border_radius="50%", background_color="#27c93f"),
+                rx.spacer(),
+                rx.text("forensics_sandbox.sh", font_family="JetBrains Mono", font_size="10px", color="rgba(255,255,255,0.4)"),
+                width="100%",
+                margin_bottom="10px"
+            ),
+            rx.vstack(
+                rx.hstack(
+                    rx.text("aegis-antigravity ~ %", color="#00f2fe", font_family="JetBrains Mono", font_size="11px"),
+                    rx.text("parquet-inspect telemetry_dump.parquet", color="white", font_family="JetBrains Mono", font_size="11px"),
+                    align="center"
+                ),
+                rx.text("Ingesting local schema mapping catalog...", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.4)"),
+                rx.text("├── timestamp  : INT64 (NANOSECONDS)", font_family="JetBrains Mono", font_size="11px", color="#ff6b6b"),
+                rx.text("├── service_id : UTF8 (API-GATEWAY)", font_family="JetBrains Mono", font_size="11px", color="white"),
+                rx.text("├── payload    : JSON (OSV-DEPENDENCY)", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.7)"),
+                rx.text("└── trace_id   : UTF8 (TX-a5d89f3)", font_family="JetBrains Mono", font_size="11px", color="#9d4edd"),
+                rx.hstack(
+                    rx.text("[===================================]", color="#00f2fe", font_family="JetBrains Mono", font_size="11px"),
+                    rx.text("100% SECURE", color="#27c93f", font_family="JetBrains Mono", font_size="10px", font_weight="700"),
+                    align="center",
+                    margin_top="10px"
+                ),
+                align="start",
+                spacing="1",
+                width="100%"
+            ),
+            width="100%",
+            spacing="1"
+        ),
+        class_name="fui-visual-panel mock-terminal"
+    )
+
+
+def thought_log_visual_mock() -> rx.Component:
+    """Mock agent thoughts stream running in real-time."""
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.text("● Aegis Cognitive Pipeline", font_family="JetBrains Mono", font_size="11px", color="#00f2fe", font_weight="700"),
+                rx.spacer(),
+                rx.text("SYS_LEVEL_5", font_family="JetBrains Mono", font_size="9px", color="rgba(255,255,255,0.3)"),
+                width="100%",
+                margin_bottom="10px"
+            ),
+            rx.vstack(
+                rx.text("● [01:42:09] Initializing Aegis-Antigravity Core context...", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.5)"),
+                rx.text("● [01:42:10] Ingesting sandboxed Parquet forensics schema...", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.7)"),
+                rx.text("● [01:42:11] OSV database connection isolated. Scanning lockfiles...", font_family="JetBrains Mono", font_size="11px", color="#ff6b6b"),
+                rx.text("● [01:42:12] CVE vulnerability isolated: urllib3 (CVE-2023-43804)", font_family="JetBrains Mono", font_size="11px", color="#ff6b6b", font_weight="700"),
+                rx.text("● [01:42:13] Running automated remediation playbook dispatch...", font_family="JetBrains Mono", font_size="11px", color="#9d4edd"),
+                rx.hstack(
+                    rx.text("● [01:42:14] Core dispatch complete. Awaiting validation", font_family="JetBrains Mono", font_size="11px", color="#27c93f"),
+                    rx.box(class_name="mock-terminal-cursor"),
+                    align="center"
+                ),
+                align="start",
+                spacing="2"
+            ),
+            width="100%",
+            spacing="1"
+        ),
+        class_name="fui-visual-panel"
+    )
+
+
+def topology_visual_mock() -> rx.Component:
+    """A beautiful mock SVG node map topology."""
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.text("🛡️ Active Threat Topology Map", font_family="JetBrains Mono", font_size="11px", color="white"),
+                rx.spacer(),
+                rx.text("60 FPS", font_family="JetBrains Mono", font_size="9px", color="#00f2fe"),
+                width="100%",
+                margin_bottom="15px"
+            ),
+            # Beautiful mock vector SVG graphics
+            rx.box(
+                rx.el.svg(
+                    # Edges lines
+                    rx.el.line(x1="70", y1="120", x2="220", y2="60", stroke="rgba(255, 255, 255, 0.1)", stroke_width="2"),
+                    rx.el.line(x1="70", y1="120", x2="220", y2="180", stroke="rgba(255, 255, 255, 0.1)", stroke_width="2"),
+                    rx.el.line(x1="220", y1="60", x2="370", y2="120", stroke="rgba(255, 255, 255, 0.1)", stroke_width="2"),
+                    rx.el.line(x1="220", y1="180", x2="370", y2="120", stroke="rgba(255, 255, 255, 0.1)", stroke_width="2"),
+                    
+                    # Glowing pulsing circle
+                    rx.el.circle(cx="220", cy="180", r="12", fill="none", stroke="#ff6b6b", stroke_width="2", class_name="mock-node-pulse"),
+                    
+                    # Nodes circles
+                    rx.el.circle(cx="70", cy="120", r="8", fill="#00f2fe"),
+                    rx.el.circle(cx="220", cy="60", r="8", fill="#27c93f"),
+                    rx.el.circle(cx="220", cy="180", r="8", fill="#ff6b6b"),
+                    rx.el.circle(cx="370", cy="120", r="8", fill="#9d4edd"),
+                    
+                    # Texts labels
+                    rx.el.text("API Gateway", x="70", y="105", fill="rgba(255,255,255,0.7)", font_family="JetBrains Mono", font_size="9px", text_anchor="middle"),
+                    rx.el.text("Auth Service", x="220", y="45", fill="rgba(255,255,255,0.7)", font_family="JetBrains Mono", font_size="9px", text_anchor="middle"),
+                    rx.el.text("DB Primary", x="220", y="205", fill="#ff6b6b", font_family="JetBrains Mono", font_size="9px", font_weight="700", text_anchor="middle"),
+                    rx.el.text("Celery Worker", x="370", y="105", fill="rgba(255,255,255,0.7)", font_family="JetBrains Mono", font_size="9px", text_anchor="middle"),
+                    
+                    view_box="0 0 440 240",
+                    width="100%",
+                    height="180px"
+                ),
+                width="100%"
+            ),
+            width="100%"
+        ),
+        class_name="fui-visual-panel"
+    )
+
+
+def integration_visual_mock() -> rx.Component:
+    """Mock visual panel for MCP Integrations connections status."""
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.text("⚙️ MCP Action Hub Status", font_family="JetBrains Mono", font_size="11px", color="white"),
+                rx.spacer(),
+                rx.text("4 / 4 ACTIVE", font_family="JetBrains Mono", font_size="9px", color="#27c93f", font_weight="700"),
+                width="100%",
+                margin_bottom="15px"
+            ),
+            rx.vstack(
+                rx.hstack(
+                    rx.text("🟢 Slack Integration", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.75)", width="160px"),
+                    rx.spacer(),
+                    rx.text("CONNECTED // #aegis-alerts", font_family="JetBrains Mono", font_size="11px", color="#00f2fe")
+                ),
+                rx.el.div(class_name="data-bar", style={"width": "100%", "opacity": "0.1"}),
+                rx.hstack(
+                    rx.text("🟢 Notion Workbook", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.75)", width="160px"),
+                    rx.spacer(),
+                    rx.text("CONNECTED // db_playbooks", font_family="JetBrains Mono", font_size="11px", color="#00f2fe")
+                ),
+                rx.el.div(class_name="data-bar", style={"width": "100%", "opacity": "0.1"}),
+                rx.hstack(
+                    rx.text("🟢 GitHub Commit-Log", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.75)", width="160px"),
+                    rx.spacer(),
+                    rx.text("CONNECTED // aegis-antigravity", font_family="JetBrains Mono", font_size="11px", color="#00f2fe")
+                ),
+                rx.el.div(class_name="data-bar", style={"width": "100%", "opacity": "0.1"}),
+                rx.hstack(
+                    rx.text("🟢 Jira Issue-Tracker", font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.75)", width="160px"),
+                    rx.spacer(),
+                    rx.text("CONNECTED // secure_api", font_family="JetBrains Mono", font_size="11px", color="#9d4edd")
+                ),
+                width="100%",
+                spacing="3",
+                align="stretch"
+            ),
+            width="100%"
+        ),
+        class_name="fui-visual-panel"
+    )
+
+
+def showcase_feature_text(heading: str, label: str, title: str, description: str, color_accent: str) -> rx.Component:
+    """GitHub-style bold left aligned feature descriptions."""
+    return rx.vstack(
+        rx.text(heading, font_family="JetBrains Mono", font_size="11px", color="rgba(255,255,255,0.3)", letter_spacing="0.2em", margin_bottom="5px"),
+        rx.hstack(
+            rx.text(label, font_family="JetBrains Mono", font_size="10px", color=color_accent, font_weight="700", padding="2px 8px", background=f"rgba(255, 255, 255, 0.04)", border_radius="4px", border=f"1px solid rgba(255,255,255,0.06)"),
+            align="center",
+            margin_bottom="10px"
+        ),
+        rx.el.h2(title, font_size="26px", font_weight="800", color="white", line_height="1.3", margin_bottom="12px"),
+        rx.text(description, font_size="14px", color="rgba(255, 255, 255, 0.5)", line_height="1.6"),
+        align="start",
+        spacing="1",
+        class_name="showcase-text-col"
+    )
+
+
+def landing_page() -> rx.Component:
+    """Premium GitHub-inspired alternating showcase scrolling landing page."""
+    return rx.el.div(
+        # Sticky navbar at the top
+        rx.hstack(
+            rx.hstack(
+                rx.text("🛡️", font_size="18px"),
+                rx.text("AEGIS // ANTIGRAVITY", font_family="JetBrains Mono", font_weight="700", font_size="14px", letter_spacing="0.15em", color="white"),
+                align="center",
+                spacing="2"
+            ),
+            rx.spacer(),
+            rx.hstack(
+                rx.text("FIELD-STATION-01 //", font_size="10px", font_family="JetBrains Mono", color="rgba(255,255,255,0.3)"),
+                rx.text("ONLINE", font_size="10px", font_family="JetBrains Mono", color="#00f2fe", font_weight="700"),
+                rx.el.span(class_name="status-blink"),
+                align="center",
+                spacing="2"
+            ),
+            rx.spacer(),
+            rx.el.button(
+                "[ LAUNCH CORE ]",
+                class_name="gate-btn",
+                on_click=State.enter_dashboard,
+                style={"padding": "8px 24px", "fontSize": "11px"}
+            ),
+            class_name="cyber-nav",
+            width="100%",
+            align="center",
+            justify="between"
+        ),
+
+        # SECTION 1: HERO VIEWPORT
+        rx.vstack(
+            # Shield pulsing logo
+            rx.box(
+                rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
+                rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
+                rx.vstack(
+                    rx.text("🛡️", font_size="56px", class_name="fade-up fade-up-d1"),
+                    align="center",
+                    justify="center"
+                ),
+                position="relative",
+                width="180px",
+                height="180px",
+                display="flex",
+                align_items="center",
+                justify_content="center"
+            ),
+
+            # Glitch Title
+            rx.el.h1(
+                "AEGIS",
+                class_name="glitch-text fade-up fade-up-d2",
+                data_text="AEGIS",
+                font_size="clamp(44px, 8vw, 80px)",
+                margin_top="-5px",
+                margin_bottom="0"
+            ),
+
+            # Subtitle
+            rx.text(
+                "ANTIGRAVITY ENGINE",
+                font_family="JetBrains Mono",
+                font_size="15px",
+                font_weight="300",
+                letter_spacing="0.65em",
+                color="rgba(255, 255, 255, 0.4)",
+                margin_top="-4px",
+                class_name="fade-up fade-up-d3"
+            ),
+
+            rx.el.div(
+                class_name="data-bar fade-up fade-up-d3",
+                style={"width": "220px", "marginTop": "20px", "marginBottom": "16px"}
+            ),
+
+            # Tagline
+            rx.text(
+                "Autonomous Zero-Warehouse Forensic & Blast Radius Orchestration",
+                font_family="Inter",
+                font_size="14px",
+                color="rgba(255, 255, 255, 0.5)",
+                text_align="center",
+                max_width="600px",
+                class_name="fade-up fade-up-d3"
+            ),
+
+            # Metadata reticle
+            rx.box(
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("PLATFORM", font_size="9px", color="rgba(255,255,255,0.3)", font_family="JetBrains Mono", letter_spacing="0.1em", width="90px"),
+                        rx.text("ACTIVE / FORWARD DEPLOYED", font_size="9px", color="#00f2fe", font_family="JetBrains Mono", font_weight="700"),
+                        align="center"
+                    ),
+                    rx.hstack(
+                        rx.text("REMEDIATION", font_size="9px", color="rgba(255,255,255,0.3)", font_family="JetBrains Mono", letter_spacing="0.1em", width="90px"),
+                        rx.text("AUTOMATED FORENSICS", font_size="9px", color="rgba(255,255,255,0.6)", font_family="JetBrains Mono"),
+                        align="center"
+                    ),
+                    rx.hstack(
+                        rx.text("TELEMETRY", font_size="9px", color="rgba(255,255,255,0.3)", font_family="JetBrains Mono", letter_spacing="0.1em", width="90px"),
+                        rx.text("PARQUET / LOCAL DATABASE", font_size="9px", color="rgba(255,255,255,0.6)", font_family="JetBrains Mono"),
+                        align="center"
+                    ),
+                    spacing="2",
+                    padding="14px 20px"
+                ),
+                class_name="reticle-box fade-up fade-up-d4",
+                margin_top="25px",
+                width="300px"
+            ),
+
+            # Scroll indicator pointing down
+            rx.el.div(
+                rx.text("SCROLL TO AUDIT SYSTEM FEATURES", font_size="8px", font_family="JetBrains Mono", color="rgba(255,255,255,0.3)", letter_spacing="0.2em"),
+                class_name="scroll-indicator fade-up fade-up-d4"
+            ),
+
+            align="center",
+            justify="center",
+            height="calc(100vh - 70px)",
+            width="100%",
+            position="relative"
+        ),
+
+        # SECTION 2: GITHUB-STYLE CONNECTING SPINE TIMELINE SHOWCASE
+        rx.box(
+            # The Vertical spine line running down behind all content
+            rx.el.div(class_name="github-spine"),
+
+            # SECTION 2A: FEATURE 1 (Ingestion)
+            rx.el.div(
+                # Glowing node — sits outside the grid, positioned absolutely
+                rx.el.div(class_name="spine-node", style={"top": "100px"}),
+                # The actual 2-column grid
+                rx.el.div(
+                    showcase_feature_text(
+                        "INGESTION PIPELINE",
+                        "ZERO-WAREHOUSE",
+                        "Ingest Massive Parquet Telemetry Logs Instantly",
+                        "Directly stream multi-gigabyte .parquet forensic records sandboxed securely on your local file systems. Perform automated SQL schema extraction, parsing local data lakes with near-zero warehousing latency or expensive ingestion pipelines.",
+                        "#00f2fe"
+                    ),
+                    rx.box(parquet_visual_mock(), class_name="showcase-visual-col"),
+                    class_name="showcase-row"
+                ),
+                style={"position": "relative"},
+            ),
+
+            # SECTION 2B: FEATURE 2 (Cognitive Brain)
+            rx.el.div(
+                rx.el.div(class_name="spine-node spine-node-purple", style={"top": "100px"}),
+                rx.el.div(
+                    rx.box(thought_log_visual_mock(), class_name="showcase-visual-col"),
+                    showcase_feature_text(
+                        "COGNITIVE LOGIC",
+                        "AUTONOMOUS TRIAGE",
+                        "AI Cognitive Agent Reasoning Chain",
+                        "Leverages Gemini 3.1 Flash for deep-reasoning investigations. Resolves constraints by executing tool-call loops synchronously, directly joining raw logs, vulnerabilities catalogs, and commit tables to identify core root causes.",
+                        "#9d4edd"
+                    ),
+                    class_name="showcase-row"
+                ),
+                style={"position": "relative"},
+            ),
+
+            # SECTION 2C: FEATURE 3 (Blast Radius Map)
+            rx.el.div(
+                rx.el.div(class_name="spine-node", style={"top": "100px"}),
+                rx.el.div(
+                    showcase_feature_text(
+                        "TOPOLOGY VECTORING",
+                        "INTERACTIVE SVG",
+                        "60FPS Vector Mapping of Dependency Blast Radius",
+                        "Hardware-accelerated reactive SVG graph tracing critical microservices paths. Designed with seamless touchpad trackpad and wheel event zooming, precise coordinate mapping, and sticky floating inspector overlays.",
+                        "#00f2fe"
+                    ),
+                    rx.box(topology_visual_mock(), class_name="showcase-visual-col"),
+                    class_name="showcase-row"
+                ),
+                style={"position": "relative"},
+            ),
+
+            # SECTION 2D: FEATURE 4 (MCP Actions Connectors)
+            rx.el.div(
+                rx.el.div(class_name="spine-node spine-node-coral", style={"top": "100px"}),
+                rx.el.div(
+                    rx.box(integration_visual_mock(), class_name="showcase-visual-col"),
+                    showcase_feature_text(
+                        "REMEDIATION PLUGINS",
+                        "CONNECTIONS STACK",
+                        "Automated Resolution & Integrations",
+                        "Bridge local telemetry and workspaces seamlessly using MCP connections. Run secure Coral queries to rollback commits on GitHub, log forensic playbooks in Notion, generate Jira tickets, or dispatch alert streams to Slack.",
+                        "#ff6b6b"
+                    ),
+                    class_name="showcase-row"
+                ),
+                style={"position": "relative"},
+            ),
+
+            class_name="github-spine-container"
+        ),
+
+        # SECTION 3: CALL TO ACTION SYSTEM LAUNCH
+        rx.vstack(
+            rx.el.div(class_name="data-bar", style={"width": "100px", "opacity": "0.2", "marginBottom": "20px"}),
+            rx.box(
+                rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
+                rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
+                rx.vstack(
+                    rx.text("🛡️", font_size="40px"),
+                    align="center",
+                    justify="center"
+                ),
+                position="relative",
+                width="120px",
+                height="120px",
+                display="flex",
+                align_items="center",
+                justify_content="center"
+            ),
+            rx.el.h2("INITIALIZE SYSTEM REMEDIATION PIPELINE", font_size="28px", font_weight="800", color="white", letter_spacing="0.05em", text_align="center", margin_top="25px"),
+            rx.text("Access live microservices nodes map, sandboxed logs analytics workspace, and cognitive thoughts audit log.", font_size="13px", color="rgba(255,255,255,0.4)", text_align="center", max_width="500px"),
+            
+            rx.el.button(
+                "[ LAUNCH FORENSIC DASHBOARD ]",
+                class_name="gate-btn",
+                on_click=State.enter_dashboard,
+                style={"marginTop": "35px", "padding": "16px 48px", "fontSize": "13px"}
+            ),
+            
+            rx.text("v2.1.0 // LEVEL 5 CLASSIFIED ACCESS // TANISHX1", font_size="9px", font_family="JetBrains Mono", color="rgba(255,255,255,0.15)", letter_spacing="0.15em", margin_top="45px"),
+            
+            padding="120px 20px 160px 20px",
+            width="100%",
+            align="center",
+            justify="center"
+        ),
+
+        # Viewport L-shaped tech corner markers
+        rx.el.div(class_name="corner-tl", style={"position": "fixed", "top": "20px", "left": "20px"}),
+        rx.el.div(class_name="corner-tr", style={"position": "fixed", "top": "20px", "right": "20px"}),
+        rx.el.div(class_name="corner-bl", style={"position": "fixed", "bottom": "20px", "left": "20px"}),
+        rx.el.div(class_name="corner-br", style={"position": "fixed", "bottom": "20px", "right": "20px"}),
+
+        class_name=rx.cond(State.landing_exiting, "landing-exit landing-container", "landing-container"),
+        position="fixed",
+        inset="0",
+        z_index="9999",
+        overflow_y="auto"
+    )
+
+
+def dashboard() -> rx.Component:
     """
-    Main Index Page. Assembles layouts into a fluid 3-column responsive design grid.
+    Main Dashboard. The 3-column forensics command grid.
     """
     return rx.box(
         rx.vstack(
             header(),
             rx.grid(
-                # Columns defined explicitly to accommodate Sidebar (Left), Chat (Center), Threat Topology (Right)
                 sidebar_forensics(),
                 chat_console(),
                 threat_intelligence(),
@@ -1208,6 +1721,27 @@ def index() -> rx.Component:
     )
 
 
+def index() -> rx.Component:
+    """
+    Root page. Shows the FUI landing gate on first load, transitions to the dashboard on enter.
+    """
+    return rx.box(
+        rx.cond(
+            State.show_landing,
+            landing_page(),
+            rx.fragment()
+        ),
+        rx.cond(
+            State.show_landing,
+            rx.fragment(),
+            dashboard()
+        ),
+        width="100%",
+        height="100vh",
+        background="#04030a"
+    )
+
+
 # Configure the Reflex compiler application instances
 app = rx.App(
     style={
@@ -1216,8 +1750,9 @@ app = rx.App(
     },
     stylesheets=[
         "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap",
+        "/landing.css",
     ]
 )
 
 # Bind index page route to compilation target
-app.add_page(index, route="/", title="Aegis-Antigravity SRE | Zero-Warehouse Forensics", on_load=State.check_coral_connections)
+app.add_page(index, route="/", title="Aegis-Antigravity | Zero-Warehouse Forensics", on_load=State.check_coral_connections)

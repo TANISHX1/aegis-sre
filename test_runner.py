@@ -1,5 +1,5 @@
 """
-Aegis-Antigravity SRE: CLI Diagnostic Test Runner
+Aegis-Antigravity: CLI Diagnostic Test Runner
 -------------------------------------------------
 This utility verifies the agent's core reasoning engine and mock tool suite
 directly from the terminal.
@@ -38,10 +38,10 @@ C_BOLD = "\033[1m"
 C_END = "\033[0m"
 
 def run_test():
-    print(f"{C_BOLD}{C_CYAN}=== AEGIS-ANTIGRAVITY SRE COGNITIVE DIAGNOSTIC RUN ==={C_END}\n")
+    print(f"{C_BOLD}{C_CYAN}=== AEGIS-ANTIGRAVITY COGNITIVE DIAGNOSTIC RUN ==={C_END}\n")
     
     # Initialize our brain instance
-    print(f"[*] Bootstrapping SRE Brain...")
+    print(f"[*] Bootstrapping Aegis Brain...")
     brain = SREBrain()
     
     # Formulate a complex, multi-hop SRE question matching our schemas
@@ -71,7 +71,7 @@ def run_test():
                 result = turn.get("result", {})
                 print(f"{C_GREEN}[Tool Outcome]{C_END} '{turn.get('tool_name')}' returned status: {result.get('status')} (records: {result.get('count', 0)})")
             elif turn_type == "final":
-                print(f"\n{C_BOLD}{C_GREEN}[Final SRE Incident Report]{C_END}\n{turn.get('content')}\n")
+                print(f"\n{C_BOLD}{C_GREEN}[Final Aegis Incident Report]{C_END}\n{turn.get('content')}\n")
             elif turn_type == "error":
                 print(f"{C_RED}[Fatal Error]{C_END} {turn.get('content')}", file=sys.stderr)
                 

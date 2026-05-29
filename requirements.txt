@@ -1,4 +1,4 @@
-# Requirements for Aegis-Antigravity SRE Zero-Warehouse Agent
+# Requirements for Aegis-Antigravity Zero-Warehouse Agent
 # Pinning versions ensures reproducible builds during the hackathon under Fedora.
 
 # Reflex framework - Pure Python reactive UI compiled to Next.js/React.

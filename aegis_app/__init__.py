@@ -1,1 +1,1 @@
-# Aegis-Antigravity SRE: Main Application Package
+# Aegis-Antigravity: Main Application Package

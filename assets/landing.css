@@ -1,0 +1,469 @@
+/* ============================================================
+   AEGIS-ANTIGRAVITY: GITHUB-INSPIRED CYBERPUNK SHOWCASE
+   Features a vertical connecting spine, alternating feature columns,
+   glowing grid cards, and interactive live terminal mockups.
+   ============================================================ */
+
+:root {
+  --color-bg: #050508;
+  --color-bg-panel: rgba(10, 10, 15, 0.7);
+  --color-cyan: #00f2fe;
+  --color-purple: #9d4edd;
+  --color-coral: #ff6b6b;
+  --glass-border: rgba(0, 242, 254, 0.08);
+  --glass-bg: rgba(9, 9, 13, 0.65);
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-bg);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  color: #ffffff;
+  font-family: var(--font-sans);
+}
+
+/* --- Base Immersive Background --- */
+.landing-container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  background-image: 
+    radial-gradient(circle at 50% 10%, rgba(0, 242, 254, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 60%, rgba(157, 78, 221, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 20% 90%, rgba(255, 107, 107, 0.02) 0%, transparent 40%);
+}
+
+.landing-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(0, 242, 254, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Continuous sweeping scanline */
+.landing-container::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0, 242, 254, 0.2) 30%,
+    rgba(0, 242, 254, 0.4) 50%,
+    rgba(0, 242, 254, 0.2) 70%,
+    transparent 100%);
+  animation: scanline 6s linear infinite;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+@keyframes scanline {
+  0% { top: -2px; }
+  100% { top: 100%; }
+}
+
+/* --- Cyber Navigation Bar --- */
+.cyber-nav {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  height: 70px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(5, 5, 8, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  z-index: 100;
+  padding: 0 40px;
+}
+
+/* --- The GitHub Feature Spine --- */
+.github-spine-container {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+.github-spine {
+  position: absolute;
+  left: 40px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg,
+    var(--color-cyan) 0%,
+    var(--color-purple) 40%,
+    var(--color-coral) 85%,
+    transparent 100%);
+  z-index: 2;
+}
+
+/* Glowing connector nodes */
+.spine-node {
+  position: absolute;
+  left: 31px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  border: 2px solid var(--color-cyan);
+  box-shadow: 0 0 10px var(--color-cyan);
+  z-index: 3;
+}
+
+.spine-node-purple {
+  border-color: var(--color-purple);
+  box-shadow: 0 0 10px var(--color-purple);
+}
+
+.spine-node-coral {
+  border-color: var(--color-coral);
+  box-shadow: 0 0 10px var(--color-coral);
+}
+
+/* --- Layout Sections --- */
+.showcase-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 80px 0 80px 80px;
+  position: relative;
+  z-index: 5;
+  align-items: center;
+}
+
+.showcase-text-col {
+  padding-top: 0;
+}
+
+.showcase-visual-col {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+/* --- High-Fidelity Interactive HUD Visuals --- */
+.fui-visual-panel {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  min-height: 260px;
+  background: var(--color-bg-panel);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 24px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.fui-visual-panel::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--color-cyan);
+  border-left: 2px solid var(--color-cyan);
+  pointer-events: none;
+}
+
+.fui-visual-panel::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid var(--color-cyan);
+  border-right: 2px solid var(--color-cyan);
+  pointer-events: none;
+}
+
+.fui-visual-panel:hover {
+  border-color: rgba(0, 242, 254, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 242, 254, 0.05);
+}
+
+/* Corner Viewport Decorations */
+.corner-tl, .corner-tr, .corner-bl, .corner-br {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 10;
+}
+.corner-tl { top: 20px; left: 20px; border-top: 2px solid var(--color-cyan); border-left: 2px solid var(--color-cyan); opacity: 0.3; }
+.corner-tr { top: 20px; right: 20px; border-top: 2px solid var(--color-cyan); border-right: 2px solid var(--color-cyan); opacity: 0.3; }
+.corner-bl { bottom: 20px; left: 20px; border-bottom: 2px solid var(--color-cyan); border-left: 2px solid var(--color-cyan); opacity: 0.3; }
+.corner-br { bottom: 20px; right: 20px; border-bottom: 2px solid var(--color-cyan); border-right: 2px solid var(--color-cyan); opacity: 0.3; }
+
+/* Concentric Pulse Rings behind logo */
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 242, 254, 0.12);
+  animation: pulse-expand 5s ease-out infinite;
+  pointer-events: none;
+}
+.pulse-ring:nth-child(1) { animation-delay: 0s; }
+.pulse-ring:nth-child(2) { animation-delay: 1.6s; }
+.pulse-ring:nth-child(3) { animation-delay: 3.2s; }
+
+@keyframes pulse-expand {
+  0% {
+    width: 60px;
+    height: 60px;
+    opacity: 0.8;
+    margin-left: -30px;
+    margin-top: -30px;
+  }
+  100% {
+    width: 600px;
+    height: 600px;
+    opacity: 0;
+    margin-left: -300px;
+    margin-top: -300px;
+  }
+}
+
+/* Glitch Header text */
+.glitch-text {
+  position: relative;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.glitch-text::before {
+  color: var(--color-cyan);
+  animation: glitch-shift-1 4s infinite linear alternate-reverse;
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+}
+
+.glitch-text::after {
+  color: var(--color-purple);
+  animation: glitch-shift-2 3s infinite linear alternate-reverse;
+  clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+}
+
+@keyframes glitch-shift-1 {
+  0%, 93%, 100% { transform: translate(0); }
+  95% { transform: translate(-2px, 1px); }
+  97% { transform: translate(2px, -1px); }
+  99% { transform: translate(-1px, 0); }
+}
+
+@keyframes glitch-shift-2 {
+  0%, 91%, 100% { transform: translate(0); }
+  93% { transform: translate(2px, 1px); }
+  95% { transform: translate(-2px, -1px); }
+  97% { transform: translate(1px, 0); }
+}
+
+/* Cyber entry button */
+.gate-btn {
+  position: relative;
+  padding: 12px 36px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--color-cyan);
+  background: transparent;
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 4px;
+}
+
+.gate-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0, 242, 254, 0.12) 50%,
+    transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.gate-btn:hover {
+  color: #ffffff;
+  border-color: var(--color-cyan);
+  box-shadow: 
+    0 0 25px rgba(0, 242, 254, 0.25),
+    inset 0 0 10px rgba(0, 242, 254, 0.05);
+}
+
+.gate-btn:hover::before {
+  transform: translateX(100%);
+}
+
+.status-blink {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-cyan);
+  animation: blink-pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 6px var(--color-cyan);
+}
+
+@keyframes blink-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.data-stream {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.6;
+  color: rgba(0, 242, 254, 0.1);
+  white-space: pre;
+  animation: stream-scroll 24s linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes stream-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+/* Horizontal shimmer line */
+.data-bar {
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--color-cyan) 30%,
+    var(--color-purple) 70%,
+    transparent 100%);
+  opacity: 0.4;
+}
+
+/* Scroll indicator pointing down */
+.scroll-indicator {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  pointer-events: none;
+}
+
+.scroll-indicator::after {
+  content: "";
+  width: 1px;
+  height: 40px;
+  background: linear-gradient(180deg, var(--color-cyan) 0%, transparent 100%);
+  animation: scroll-draw 2s infinite ease-in-out;
+}
+
+@keyframes scroll-draw {
+  0% { transform: scaleY(0); transform-origin: top; }
+  50% { transform: scaleY(1); transform-origin: top; }
+  50.1% { transform: scaleY(1); transform-origin: bottom; }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+
+/* Staggered entrance animations */
+.fade-up {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fade-up-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fade-up-d1 { animation-delay: 0.1s; }
+.fade-up-d2 { animation-delay: 0.3s; }
+.fade-up-d3 { animation-delay: 0.5s; }
+
+@keyframes fade-up-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-exit {
+  animation: landing-fade-out 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes landing-fade-out {
+  0% { opacity: 1; transform: scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: scale(1.03); filter: blur(12px); }
+}
+
+/* Custom interactive modules */
+.mock-terminal {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.mock-terminal-input {
+  color: var(--color-cyan);
+}
+
+.mock-terminal-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  background: var(--color-cyan);
+  animation: blink-pulse 1s step-end infinite;
+}
+
+/* Node pulse */
+.mock-node-pulse {
+  animation: pulse-ring-glow 3s infinite ease-in-out;
+}
+
+@keyframes pulse-ring-glow {
+  0%, 100% { r: 5px; opacity: 0.4; }
+  50% { r: 12px; opacity: 0; }
+}
