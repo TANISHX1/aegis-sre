@@ -34,7 +34,7 @@ import logging
 import requests
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
-from typing import Dict, Any, Union
+from typing import Dict, Union
 
 # Set up logging for incident auditing
 logging.basicConfig(level=logging.INFO)
@@ -84,7 +84,7 @@ def _auto_start_local_receiver():
         logger.warning(f"Could not auto-start local webhook receiver: {e}")
 
 
-def trigger_n8n_workflow(payload: Dict[str, Any], webhook_url: str = DEFAULT_N8N_WEBHOOK_URL) -> Dict[str, Any]:
+def trigger_n8n_workflow(payload: dict, webhook_url: str = DEFAULT_N8N_WEBHOOK_URL) -> dict:
     """
     Triggers an automated remediation workflow in n8n via a POST webhook request.
     """

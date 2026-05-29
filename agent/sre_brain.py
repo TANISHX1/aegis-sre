@@ -313,8 +313,20 @@ class SREBrain:
         
         self.client = None
         
-        # Priority 1: Groq (free, fast, no rate limit issues)
-        if _is_valid(groq_key):
+        # Priority 1: Gemini (native SDK with function calling)
+        if _is_valid(gemini_key):
+            if HAS_GEMINI:
+                logger.info("Initializing Google GenAI native client for Gemini model.")
+                self.api_key = gemini_key
+                self.model = os.getenv("SRE_LLM_MODEL", "gemini-1.5-flash-8b")
+                self.client = genai.Client(api_key=gemini_key)
+                self.is_gemini_native = True
+                self.provider = "gemini"
+            else:
+                logger.warning("Gemini key found but google-genai library not installed.")
+        
+        # Priority 2: Groq (free, fast, no rate limit issues)
+        if not self.client and _is_valid(groq_key):
             if HAS_OPENAI:
                 logger.info("🚀 Initializing Groq client (Llama 3.3 70B via OpenAI-compatible API).")
                 self.api_key = groq_key
@@ -326,18 +338,6 @@ class SREBrain:
                 self.provider = "groq"
             else:
                 logger.warning("Groq key found but openai library not installed.")
-        
-        # Priority 2: Gemini (native SDK with function calling)
-        if not self.client and _is_valid(gemini_key):
-            if HAS_GEMINI:
-                logger.info("Initializing Google GenAI native client for Gemini model.")
-                self.api_key = gemini_key
-                self.model = os.getenv("SRE_LLM_MODEL", "gemini-2.0-flash")
-                self.client = genai.Client(api_key=gemini_key)
-                self.is_gemini_native = True
-                self.provider = "gemini"
-            else:
-                logger.warning("Gemini key found but google-genai library not installed.")
         
         # Priority 3: OpenAI (standard or custom endpoint)
         if not self.client and _is_valid(openai_key):

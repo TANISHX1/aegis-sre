@@ -47,8 +47,8 @@ def run_test():
     # Formulate a complex, multi-hop SRE question matching our schemas
     telemetry_query = (
         "We are seeing a massive spike in 500 errors in our production api-gateway. "
-        "Can you scan our server log 'auth_errors.parquet', find if there are package vulnerabilities "
-        "causing this, check if TANISHX1 has made any recent commits related to those packages, "
+        "Can you scan our local_file.api_gateway_logs, find if there are package vulnerabilities "
+        "causing this, check if the author mentioned in the crash log has made any recent commits related to those packages, "
         "and if so, trigger a remediation alert immediately?"
     )
     

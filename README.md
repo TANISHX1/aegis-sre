@@ -179,9 +179,9 @@ flowchart TD
 * **5 MCP Tools**: `sql`, `list_catalog`, `search_catalog`, `describe_table`, `list_columns` — all accessible through the persistent connection.
 * **Three-Tier Fallback**: MCP → subprocess → mock simulation. If MCP fails, the system gracefully degrades without crashing.
 
-### 2. Zero-Warehouse Federated Analytics
+### 2. Zero-Warehouse Federated Analytics & Live Telemetry
 * **No Database Required**: All data is stored in localized Parquet files. We register these via Coral Source Manifests to run complex cross-source JOINs natively.
-* **Three Distinct Telemetry Scenarios**: API Gateway (500 errors), Auth Service (JWT failures), Payment Gateway (Stripe timeouts).
+* **Live Telemetry Injection**: We included `tools/generate_live_telemetry.py` which fetches the latest real commit from your GitHub repository and dynamically injects it into a crash log, creating 100% authentic test scenarios without hardcoded mocks!
 
 ### 3. Live GitHub Integration
 * **Real Commit Scanning**: When `GITHUB_TOKEN` is provided, the agent queries live GitHub commits via Coral's native GitHub plugin — no mocks needed.
@@ -192,9 +192,10 @@ flowchart TD
 * **Gemini & OpenAI Support**: The `sre_brain.py` checks `GEMINI_API_KEY` first, then falls back to `OPENAI_API_KEY`. The Gemini path uses the native `google-genai` SDK with automatic function calling.
 * **Graceful Mock Fallback**: If API keys are missing OR the API returns an error (rate limits, etc.), the agent safely falls back to a hardcoded simulation loop.
 
-### 5. Auto-Start Webhook Receiver
-* **Zero-Setup Remediation**: The dispatcher automatically boots a lightweight Python webhook server on port 5678 if nothing is already listening. No Docker, no n8n setup required.
-* **Audit Trail**: Every incident is logged to `n8n_data/incident_log.jsonl` in machine-readable JSONL format.
+### 5. Automated n8n Webhook Container
+* **Dockerized n8n Integration**: Spin up a fully containerized n8n instance via our provided `docker-compose.yml`. Easily import the provided `n8n_workflow.json` to activate the SRE remediation webhook on port 5678.
+* **Auto-Start Local Webhook Receiver**: If Docker isn't available, the dispatcher automatically boots a lightweight Python webhook server on port 5678 to ensure payloads are never dropped.
+* **Audit Trail**: Every incident is securely logged to `n8n_data/incident_log.jsonl`.
 * **Slack/Discord Forwarding**: Set `SLACK_WEBHOOK_URL` or `DISCORD_WEBHOOK_URL` in `.env` to forward real-time alerts.
 
 ### 6. Non-Blocking Background Investigations
@@ -235,7 +236,17 @@ N8N_WEBHOOK_URL=http://localhost:5678/webhook/aegis-sre-remediate
 # DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR/WEBHOOK
 ```
 
-### 4. Generate Mock Data & Register Sources
+### 4. Setup Live Dependencies (Telemetry & n8n)
+```bash
+# Generate live telemetry logs injected with real GitHub commits
+python3 tools/generate_live_telemetry.py
+
+# (Optional) Spin up real n8n server on port 5678 via Docker
+sudo docker-compose up -d
+```
+*Note: Once n8n is running, import `n8n_workflow.json` in the UI (`http://localhost:5678`) and click Publish!*
+
+### 5. Generate Base Mock Data & Register Sources
 ```bash
 python3 setup_sources.py
 ```
@@ -246,7 +257,7 @@ This single command:
 - Generates YAML manifests with correct absolute paths for your machine
 - Registers all sources with Coral CLI
 
-### 5. Launch the Application
+### 6. Launch the Application
 ```bash
 reflex run
 ```
@@ -260,9 +271,9 @@ Follow this script to demonstrate the app for the hackathon:
 
 1. **Upload Telemetry**: Drag `logs/api_gateway_telemetry.parquet` into the **Forensic Control** dropzone.
 2. **Launch Query**: Type this prompt:
-   > *"I'm seeing 500 errors from the api-gateway since this morning. Please investigate using the uploaded server telemetry, the OSV vulnerabilities database, and our GitHub commits. Pay special attention to any commits from TANISHX1."*
-3. **Watch the Agent Think**: The **Agent Cognitive Log** panel streams real-time thoughts as the AI writes and executes Coral `JOIN` statements.
-4. **Observe Remediation**: The AI detects `urllib3` CVE-2023-43804, traces it to TANISHX1's commit, and fires the remediation webhook. Check `n8n_data/incident_log.jsonl` for the audit trail.
+   > *"We are seeing a massive spike in 500 errors in our production api-gateway. Can you scan our local_file.api_gateway_logs, find if there are package vulnerabilities causing this, check if the author mentioned in the crash log has made any recent commits related to those packages, and if so, trigger a remediation alert immediately?"*
+3. **Watch the Agent Think**: The **Agent Cognitive Log** panel streams real-time thoughts as the AI writes and executes Coral `JOIN` statements using the live `gemini-3.1-flash-lite` model.
+4. **Observe Remediation**: The AI detects the CVE, traces it to the live GitHub commit author, and fires the remediation webhook to n8n. Check `n8n_data/incident_log.jsonl` or your n8n dashboard for the payload.
 
 ### CLI Test (Alternative)
 ```bash
