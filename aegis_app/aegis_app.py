@@ -52,21 +52,6 @@ ACCENT_CORAL = "#FF6F61"
 ACCENT_CYAN = "#00F2FE"
 ACCENT_PURPLE = "#9D4EDD"
 
-NODE_COORDINATES = {
-    "logs-db": {"x": 150, "y": 150},
-    "api-gateway": {"x": 70, "y": 70},
-    "auth-service": {"x": 230, "y": 70},
-    "payment-v2": {"x": 70, "y": 230},
-    "notify-worker": {"x": 230, "y": 230},
-}
-
-STATIC_EDGES = [
-    {"source": "logs-db", "target": "api-gateway"},
-    {"source": "logs-db", "target": "auth-service"},
-    {"source": "logs-db", "target": "payment-v2"},
-    {"source": "logs-db", "target": "notify-worker"},
-    {"source": "api-gateway", "target": "auth-service"},
-]
 
 GLASS_BOX = {
     "background": "rgba(18, 17, 24, 0.65)",
@@ -106,14 +91,39 @@ class State(rx.State):
     uploaded_logs: List[str] = []
     
     # 5. Native Reactive SVG Graph States
-    # Represents nodes affected by an incident (Blast Radius) and their security state.
+    demo_mode: bool = os.environ.get("DEMO_MODE", "true").lower() == "true"
+
     blast_radius_nodes: List[Dict[str, Any]] = [
-        {"id": "logs-db", "name": "Telemetry Source", "x": 150, "y": 150, "status": "Source", "ip": "Zero-Warehouse Logs", "vulnerable": "None"},
-        {"id": "api-gateway", "name": "API Gateway", "x": 70, "y": 70, "status": "Degraded", "ip": "192.168.1.42", "vulnerable": "urllib3 (CVE-2023-43804)"},
-        {"id": "auth-service", "name": "Auth Service", "x": 230, "y": 70, "status": "Degraded", "ip": "192.168.1.15", "vulnerable": "cryptography (CVE-2023-49083)"},
-        {"id": "payment-v2", "name": "Payment Engine", "x": 70, "y": 230, "status": "Stable", "ip": "192.168.1.100", "vulnerable": "None"},
-        {"id": "notify-worker", "name": "Notifier Pod", "x": 230, "y": 230, "status": "Stable", "ip": "192.168.1.105", "vulnerable": "None"},
+        {"id": "api-gateway", "label": "API Gateway", "x": 170, "y": 50, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
+        {"id": "auth-service", "label": "Auth Service", "x": 80, "y": 150, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
+        {"id": "db-primary", "label": "Primary DB", "x": 80, "y": 250, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
+        {"id": "payment-sys", "label": "Payment Sys", "x": 260, "y": 150, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
+        {"id": "worker-queue", "label": "Celery Workers", "x": 260, "y": 250, "status": "Healthy", "vulnerable": "None", "remediation": "No current action required."},
+    ] if os.environ.get("DEMO_MODE", "true").lower() == "true" else [
+        {"id": "core-hub", "label": "Scanning Architecture...", "x": 170, "y": 150, "status": "Healthy", "vulnerable": "None", "remediation": "Awaiting SRE Agent analysis."}
     ]
+
+    blast_radius_edges: List[Dict[str, str]] = [
+        {"source": "api-gateway", "target": "auth-service"},
+        {"source": "api-gateway", "target": "payment-sys"},
+        {"source": "auth-service", "target": "db-primary"},
+        {"source": "payment-sys", "target": "worker-queue"},
+    ] if os.environ.get("DEMO_MODE", "true").lower() == "true" else []
+
+    @rx.var
+    def computed_edges(self) -> List[Dict[str, Any]]:
+        coord_map = {node["id"]: {"x": node["x"], "y": node["y"]} for node in self.blast_radius_nodes}
+        edges_with_coords = []
+        for edge in self.blast_radius_edges:
+            if edge["source"] in coord_map and edge["target"] in coord_map:
+                edges_with_coords.append({
+                    "x1": str(coord_map[edge["source"]]["x"]),
+                    "y1": str(coord_map[edge["source"]]["y"]),
+                    "x2": str(coord_map[edge["target"]]["x"]),
+                    "y2": str(coord_map[edge["target"]]["y"])
+                })
+        return edges_with_coords
+
     # Details of node clicked in the Threat panel
     selected_node_info: Dict[str, str] = {
         "id": "api-gateway",
@@ -143,6 +153,11 @@ class State(rx.State):
     slack_connection_status: str = "Checking..."
     show_slack_token_input: bool = False
     slack_token: str = ""
+
+    show_playbooks: bool = False
+    
+    def toggle_playbooks(self):
+        self.show_playbooks = not self.show_playbooks
 
     # 6. ASYNC CORE INVESTIGATION LOOP
     @rx.event(background=True)
@@ -192,6 +207,13 @@ class State(rx.State):
                         # Dynamically update the blast radius or SVG topology based on Coral execution outputs!
                         if tool_name == "execute_coral_query" and result.get("status") == "success":
                             self._parse_query_impact(result.get("data", []))
+                        elif tool_name == "update_threat_topology" and result.get("status") == "success":
+                            nodes = result.get("nodes", [])
+                            edges = result.get("edges", [])
+                            if nodes:
+                                self.blast_radius_nodes = nodes
+                                self.blast_radius_edges = edges
+                                self.agent_thought_log.append("🚨 Agent has dynamically redrawn the Threat Topology graph!")
                     elif step_type == "final":
                         self.chat_history.append({"role": "user", "content": current_q})
                         self.chat_history.append({"role": "assistant", "content": step.get("content", "")})
@@ -227,9 +249,9 @@ class State(rx.State):
                 
                 self.selected_node_info = {
                     "id": n["id"],
-                    "name": n["name"],
+                    "name": n["label"],
                     "status": n["status"],
-                    "ip": n["ip"],
+                    "ip": "N/A",
                     "vulnerable": n["vulnerable"],
                     "remediation": remediation
                 }
@@ -270,11 +292,14 @@ class State(rx.State):
                 
             self.agent_thought_log.append(f"📁 Forensic Log mounted: {safe_name} -> Available inside Coral as local_file.read('/logs/{safe_name}')")
 
-    def run_predefined_playbook(self, prompt: str):
+    @rx.event(background=True)
+    async def run_predefined_playbook(self, prompt: str):
         """
-        Loads quick playbooks directly into the user input to streamline manual response.
+        Loads quick playbooks directly into the user input and executes them immediately.
         """
-        self.current_question = prompt
+        async with self:
+            self.current_question = prompt
+        return State.trigger_investigation
 
     def set_current_question(self, question: str):
         """
@@ -505,11 +530,10 @@ class State(rx.State):
 
     def _parse_query_impact(self, dataset: List[Dict[str, Any]]):
         """
-        Helper parsing tool outcomes to alter UI topology reactively.
-        If Coral database queries isolate vulnerable packages, we dynamically alter
-        nodes to "Degraded" statuses inside the Reflex memory model.
+        Mock logic for demo: Scans the raw SQL query results for vulnerability references.
+        If found, mutates specific connected nodes to "Degraded" statuses inside the Reflex memory model.
         """
-        if not dataset:
+        if not dataset or not self.demo_mode:
             return
             
         self.agent_thought_log.append(f"📊 Analyzing {len(dataset)} query records to calculate blast radius topology...")
@@ -783,40 +807,55 @@ def sidebar_forensics() -> rx.Component:
         rx.divider(border_color="rgba(255,255,255,0.05)", margin_y="15px"),
 
         # 3. FORENSIC PLAYBOOKS
-        rx.heading("FORENSIC PLAYBOOKS", size="2", color="white", font_family="Inter", font_weight="600"),
-        rx.text("Automated multi-hop preloaded query scripts.", size="1", color="rgba(255,255,255,0.4)"),
+        rx.button(
+            rx.hstack(
+                rx.heading("FORENSIC PLAYBOOKS", size="2", color="white", font_family="Inter", font_weight="600"),
+                rx.spacer(),
+                rx.icon(rx.cond(State.show_playbooks, "chevron-up", "chevron-down"), color="rgba(255,255,255,0.4)"),
+                width="100%", align="center"
+            ),
+            on_click=State.toggle_playbooks,
+            variant="ghost", width="100%", padding="0", _hover={"background_color": "transparent"},
+            cursor="pointer"
+        ),
+        rx.text("Automated multi-hop preloaded query scripts.", size="1", color="rgba(255,255,255,0.4)", margin_bottom="10px"),
         
-        rx.vstack(
-            rx.button(
-                "🔍 Scan vulnerabilities (OSV)",
-                on_click=State.run_predefined_playbook("Scan auth_errors.parquet logs and identify matching package vulnerabilities from osv.packages database."),
+        rx.cond(
+            State.show_playbooks,
+            rx.vstack(
+                rx.button(
+                    "🔍 Infrastructure Vulnerability Scan",
+                    on_click=State.run_predefined_playbook("Scan all mounted .parquet logs and identify matching package vulnerabilities from the osv.packages database."),
+                    width="100%",
+                    variant="outline",
+                    color_scheme="teal",
+                    size="1",
+                    font_family="Inter",
+                    justify="start"
+                ),
+                rx.button(
+                    "🐙 Commit Anomaly Check",
+                    on_click=State.run_predefined_playbook(f"Audit recent commits from author {State.github_owner} in the {State.github_repo_name} repository. Identify recent code velocity and flag any abnormal patterns."),
+                    width="100%",
+                    variant="outline",
+                    color_scheme="indigo",
+                    size="1",
+                    font_family="Inter",
+                    justify="start"
+                ),
+                rx.button(
+                    "⚡ Zero-Warehouse RCA",
+                    on_click=State.run_predefined_playbook(f"Execute multi-hop SQL JOIN between server logs, OSV vulnerabilities, and {State.github_owner}'s GitHub commits to find the exact root cause."),
+                    width="100%",
+                    variant="outline",
+                    color_scheme="orange",
+                    size="1",
+                    font_family="Inter",
+                    justify="start"
+                ),
                 width="100%",
-                variant="outline",
-                color_scheme="teal",
-                size="1",
-                font_family="Inter"
-            ),
-            rx.button(
-                "🐙 Trace TANISHX1 commits",
-                on_click=State.run_predefined_playbook("Audit recent commits from author TANISHX1 in github.commits and correlate with server errors."),
-                width="100%",
-                variant="outline",
-                color_scheme="indigo",
-                size="1",
-                font_family="Inter"
-            ),
-            rx.button(
-                "⚡ Zero-Warehouse Join",
-                on_click=State.run_predefined_playbook("Execute multi-hop SQL JOIN between server.parquet logs, Google OSV API package vulnerabilities, and TANISHX1 GitHub commits to find the exact root cause."),
-                width="100%",
-                variant="outline",
-                color_scheme="orange",
-                size="1",
-                font_family="Inter"
-            ),
-            width="100%",
-            spacing="3",
-            margin_top="10px"
+                spacing="3",
+            )
         ),
         
         rx.divider(border_color="rgba(255,255,255,0.05)", margin_y="15px"),
@@ -999,19 +1038,18 @@ def threat_intelligence() -> rx.Component:
         rx.box(
             rx.el.svg(
                 # A. DRAW EDGES / NETWORKING CHANNELS
-                # Drew statically at compile-time to bypass dynamic list lookups in Reflex.
-                *[
-                    rx.el.line(
-                        x1=NODE_COORDINATES[edge["source"]]["x"],
-                        y1=NODE_COORDINATES[edge["source"]]["y"],
-                        x2=NODE_COORDINATES[edge["target"]]["x"],
-                        y2=NODE_COORDINATES[edge["target"]]["y"],
+                rx.foreach(
+                    State.computed_edges,
+                    lambda edge: rx.el.line(
+                        x1=edge["x1"],
+                        y1=edge["y1"],
+                        x2=edge["x2"],
+                        y2=edge["y2"],
                         stroke="rgba(255, 255, 255, 0.15)",
                         stroke_width="1.5",
                         stroke_dasharray="4,4"
                     )
-                    for edge in STATIC_EDGES
-                ],
+                ),
                 
                 # B. DRAW NODE GLOWS & LABELS
                 rx.foreach(
