@@ -592,7 +592,7 @@ def header() -> rx.Component:
         rx.hstack(
             # Premium glowing emblem
             rx.box(
-                rx.text("🛡️", font_size="24px"),
+                rx.image(src="/aegis_logo.png", width="30px", height="30px"),
                 style={"filter": "drop-shadow(0 0 8px #FF6F61)"}
             ),
             rx.vstack(
@@ -898,12 +898,15 @@ def chat_console() -> rx.Component:
                     lambda msg: rx.box(
                         rx.vstack(
                             rx.hstack(
-                                rx.text(
-                                    rx.cond(msg["role"] == "user", "👤 OPERATOR", "🛡️ AEGIS AGENT"),
-                                    font_size="10px",
-                                    font_weight="700",
-                                    font_family="JetBrains Mono",
-                                    color=rx.cond(msg["role"] == "user", ACCENT_CYAN, ACCENT_CORAL)
+                                rx.cond(
+                                    msg["role"] == "user",
+                                    rx.text("👤 OPERATOR", font_size="10px", font_weight="700", font_family="JetBrains Mono", color=ACCENT_CYAN),
+                                    rx.hstack(
+                                        rx.image(src="/aegis_logo.png", width="14px", height="14px"),
+                                        rx.text("AEGIS AGENT", font_size="10px", font_weight="700", font_family="JetBrains Mono", color=ACCENT_CORAL),
+                                        align="center",
+                                        spacing="2"
+                                    )
                                 ),
                                 rx.spacer(),
                                 align="center",
@@ -1210,7 +1213,7 @@ def landing_data_stream() -> rx.Component:
         "osv.scan_dependencies(lockfile='poetry.lock')\n"
         "forensics.upload_parquet(sandbox='/logs')\n"
         "graph.render_svg(viewbox=state.svg_view_box)\n"
-        "state.agent_thought_log.append('🛡️ Scan complete')\n"
+        "state.agent_thought_log.append('✨ Scan complete')\n"
         "telemetry.stream(protocol='websocket', fps=60)\n"
     )
     return rx.el.div(
@@ -1240,7 +1243,7 @@ def landing_data_stream() -> rx.Component:
         "osv.scan_dependencies(lockfile='poetry.lock')\n"
         "forensics.upload_parquet(sandbox='/logs')\n"
         "graph.render_svg(viewbox=state.svg_view_box)\n"
-        "state.agent_thought_log.append('🛡️ Scan complete')\n"
+        "state.agent_thought_log.append('✨ Scan complete')\n"
         "telemetry.stream(protocol='websocket', fps=60)\n"
     )
     return rx.el.div(
@@ -1333,7 +1336,12 @@ def topology_visual_mock() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.text("🛡️ Active Threat Topology Map", font_family="JetBrains Mono", font_size="11px", color="white"),
+                rx.hstack(
+                    rx.image(src="/aegis_logo.png", width="16px", height="16px"),
+                    rx.text("Active Threat Topology Map", font_family="JetBrains Mono", font_size="11px", color="white"),
+                    align="center",
+                    spacing="2"
+                ),
                 rx.spacer(),
                 rx.text("60 FPS", font_family="JetBrains Mono", font_size="9px", color="#00f2fe"),
                 width="100%",
@@ -1443,7 +1451,7 @@ def landing_page() -> rx.Component:
         # Sticky navbar at the top
         rx.hstack(
             rx.hstack(
-                rx.text("🛡️", font_size="18px"),
+                rx.image(src="/aegis_logo.png", width="24px", height="24px"),
                 rx.text("AEGIS // ANTIGRAVITY", font_family="JetBrains Mono", font_weight="700", font_size="14px", letter_spacing="0.15em", color="white"),
                 align="center",
                 spacing="2"
@@ -1476,7 +1484,7 @@ def landing_page() -> rx.Component:
                 rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
                 rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
                 rx.vstack(
-                    rx.text("🛡️", font_size="56px", class_name="fade-up fade-up-d1"),
+                    rx.image(src="/aegis_logo.png", width="74px", height="74px", class_name="fade-up fade-up-d1"),
                     align="center",
                     justify="center"
                 ),
@@ -1650,7 +1658,7 @@ def landing_page() -> rx.Component:
                 rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
                 rx.el.div(class_name="pulse-ring", style={"left": "50%", "top": "50%"}),
                 rx.vstack(
-                    rx.text("🛡️", font_size="40px"),
+                    rx.image(src="/aegis_logo.png", width="56px", height="56px"),
                     align="center",
                     justify="center"
                 ),
