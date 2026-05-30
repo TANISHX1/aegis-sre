@@ -2131,6 +2131,9 @@ app = rx.App(
         "::placeholder": {
             "color": "#a1a1aa !important",
             "opacity": "1 !important",
+        },
+        ".rt-Flex a[href='https://reflex.dev']": {
+            "display": "none !important",
         }
     },
     stylesheets=[

@@ -54,12 +54,13 @@ def generate_osv_source():
     yaml_content = f"""name: osv
 version: 0.1.0
 dsl_version: 3
-backend: parquet
+backend: http
+base_url: "https://api.osv.dev"
 tables:
   - name: packages
-    description: "Google OSV API mock"
+    description: "Google OSV API"
     source:
-      location: "file://{LOGS_DIR}/osv_packages.parquet"
+      endpoint: "/v1/query"
 """
     path = os.path.join(PROJECT_ROOT, "osv-source.yaml")
     with open(path, "w") as f:
