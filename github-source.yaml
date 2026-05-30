@@ -6,4 +6,4 @@ tables:
   - name: commits
     description: "GitHub commits mock"
     source:
-      location: "file:///home/blazex/Documents/git/aegis-antigravity-sre/logs/github_commits.parquet"
+      location: "file:///home/harshitdv/Secondary_workspace/aegis-sre/logs/github_commits.parquet"

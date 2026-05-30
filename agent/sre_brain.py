@@ -104,8 +104,8 @@ logger = logging.getLogger("SREBrain")
 
 # Configure the System Prompt containing the federated architecture instructions.
 # Why? Explicit schema definitions and join patterns are supplied inside the system prompt 
-# to optimize zero-shot SQL generation accuracy and instruct the model on TANISHX1's git author context.
-SYSTEM_PROMPT = """You are "Aegis SRE", an elite Zero-Warehouse root-cause investigation agent and Principal Systems Architect. 
+# to optimize zero-shot SQL generation accuracy and instruct the model on the target repository's git author context.
+SYSTEM_PROMPT = """You are "Aegis-Antigravity SRE", an elite Zero-Warehouse root-cause investigation agent and Principal Systems Architect. 
 Your goal is to investigate production incidents, find root causes, and trigger automated remediations.
 
 You are equipped with three tools:
@@ -193,7 +193,7 @@ ORDER BY l.timestamp DESC
 ```sql
 SELECT sha, commit__author__name, commit__message, commit__author__date, files, stats__total
 FROM github.commits
-WHERE owner = '{github_owner}' AND repo = '{github_repo_name}' AND author = 'TANISHX1'
+WHERE owner = '{github_owner}' AND repo = '{github_repo_name}' AND author = 'alice'
 LIMIT 20
 ```
 
@@ -245,7 +245,7 @@ OPENAI_TOOLS = [
                             "incident_id": {"type": "string", "description": "Unique incident ID, e.g., INC-2026-001."},
                             "severity": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
                             "service": {"type": "string", "description": "Compromised or malfunctioning service name."},
-                            "root_cause": {"type": "string", "description": "Summary of identified root cause (e.g., Vulnerable urllib3 version committed by TANISHX1)."},
+                            "root_cause": {"type": "string", "description": "Summary of identified root cause (e.g., Vulnerable urllib3 version committed by alice)."},
                             "blast_radius_nodes": {
                                 "type": "array", 
                                 "items": {"type": "string"},
@@ -601,7 +601,7 @@ class SREBrain:
         # Dynamically pull repo from env so this adapts to any user's configuration
         github_repo = os.getenv("GITHUB_REPO", "Harshit7623/aegis-sre")
         owner, repo = github_repo.split("/") if "/" in github_repo else ("Harshit7623", "aegis-sre")
-        mock_sql = f"SELECT * FROM local_file.api_gateway_logs JOIN osv.packages JOIN github.commits WHERE author = 'TANISHX1' AND owner = '{owner}' AND repo = '{repo}'"
+        mock_sql = f"SELECT * FROM local_file.api_gateway_logs JOIN osv.packages JOIN github.commits WHERE author = 'alice' AND owner = '{owner}' AND repo = '{repo}'"
         yield {
             "type": "tool_call",
             "tool_name": "execute_coral_query",
@@ -619,7 +619,7 @@ class SREBrain:
         # 2. Simulate thought synthesis
         yield {
             "type": "thought",
-            "content": f"Forensic scan discovered high-severity vulnerability CVE-2023-43804 (urllib3 package) introduced in commit a5d89f3 by TANISHX1. This is currently generating 500 response codes in the api-gateway service.\n\nRecommended mitigation: Roll back commit a5d89f3 and upgrade urllib3 dependency to 1.26.18. Dispatching automated remediation workflow via n8n."
+            "content": f"Forensic scan discovered high-severity vulnerability CVE-2023-43804 (urllib3 package) introduced in commit a5d89f3 by alice. This is currently generating 500 response codes in the api-gateway service.\n\nRecommended mitigation: Roll back commit a5d89f3 and upgrade urllib3 dependency to 1.26.18. Dispatching automated remediation workflow via n8n."
         }
 
         # 3. Simulate n8n workflow dispatch tool call
@@ -627,7 +627,7 @@ class SREBrain:
             "incident_id": "INC-2026-042",
             "severity": "HIGH",
             "service": "api-gateway",
-            "root_cause": "Vulnerable urllib3 library (CVE-2023-43804) committed by TANISHX1",
+            "root_cause": "Vulnerable urllib3 library (CVE-2023-43804) committed by alice",
             "blast_radius_nodes": ["api-gateway", "auth-service"],
             "remediation_action": "Roll back commit a5d89f3 and upgrade urllib3 to 1.26.18"
         }
@@ -647,11 +647,12 @@ class SREBrain:
         # 4. Stream final report
         yield {
             "type": "final",
-            "content": """### Root Cause Analysis & Forensic Summary: Aegis SRE
-*   **Root Cause**: The production crash was triggered by a high-severity cookie-leak vulnerability in **urllib3** (`CVE-2023-43804`). This vulnerability was committed by developer **TANISHX1** in commit `a5d89f3` while refactoring dependencies.
-*   **Blast Radius**: The issue has degraded **api-gateway** and **auth-service**, generating `500 Server Error` response codes across 12% of traffic.
-*   **Triggered Actions**:
-    * An n8n workflow was successfully launched to quarantine the node.
-    * Slack alerts and incident tickets have been dispatched to the on-call queue.
-    * Scheduled dependency upgrade tasks to force-install `urllib3==1.26.18` have been registered."""
+            "content": """### Root Cause Analysis & Forensic Summary: Aegis-Antigravity SRE
+
+1. **Root Cause**: The production crash was triggered by a high-severity cookie-leak vulnerability in **urllib3** (`CVE-2023-43804`). This vulnerability was committed by developer **alice** in commit `a5d89f3` while refactoring dependencies.
+2. **Blast Radius**: The issue has degraded **api-gateway** and **auth-service**, generating `500 Server Error` response codes across 12% of traffic.
+3. **Triggered Actions**:
+   * An n8n workflow was successfully launched to quarantine the node.
+   * Slack alerts and incident tickets have been dispatched to the on-call SRE queue.
+   * Scheduled dependency upgrade tasks to force-install `urllib3==1.26.18` have been registered."""
         }

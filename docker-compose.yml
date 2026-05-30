@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  aegis:
+    build: .
+    ports:
+      - "3000:3000"  # Frontend
+      - "8000:8000"  # Backend
+    env_file:
+      - .env
+    environment:
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/aegis-sre-remediate
+    volumes:
+      - ./logs:/app/logs
+      - ./n8n_data:/app/n8n_data
+    depends_on:
+      - n8n
+    restart: unless-stopped
+
   n8n:
     image: docker.n8n.io/n8nio/n8n
     restart: always

@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 def generate():
-    print("Fetching latest commit from Harshit7623/aegis-sre...")
-    resp = requests.get("https://api.github.com/repos/Harshit7623/aegis-sre/commits")
+    print("Fetching latest commit from Harshit7623/Aegis_demo_repo...")
+    resp = requests.get("https://api.github.com/repos/Harshit7623/Aegis_demo_repo/commits")
     if resp.status_code != 200:
         print("Failed to fetch commits. Using fallback mock data.")
         author = "Harshit7623"
@@ -39,8 +39,8 @@ def generate():
             "timestamp": now - timedelta(minutes=5-i),
             "level": "ERROR",
             "service": "api-gateway",
-            # We explicitly mention 'requests' here because our OSV table has package_name='requests'
-            "message": f"Fatal exception in requests. Commit {sha} (author: {author}) might be related.",
+            # We explicitly mention 'urllib3' here because our OSV table has package_name='urllib3'
+            "message": f"Fatal exception in urllib3. Commit {sha} (author: {author}) might be related.",
             "ip": "10.0.0.5",
             "request_path": "/v1/api/data",
             "response_code": 500

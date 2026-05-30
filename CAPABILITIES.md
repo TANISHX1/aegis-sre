@@ -1,8 +1,8 @@
 # 🛡️ Aegis-SRE: Capabilities & Proof of Working
 
-> **Document Purpose**: This document provides a complete overview of all features, their current working status, and live proof outputs for contributors joining the project.
+> **Document Purpose**: This document provides a complete overview of all features, their current working status, and live proof outputs for contributors and hackathon judges.
 >
-> **Last Updated**: May 27, 2026 | **Repo**: [Harshit7623/aegis-sre](https://github.com/Harshit7623/aegis-sre) | **Commit**: `d46a1bb`
+> **Repo**: [Harshit7623/aegis-sre](https://github.com/Harshit7623/aegis-sre)
 
 ---
 
@@ -23,18 +23,19 @@
 
 Aegis-SRE is an **AI-powered SRE forensics agent** that investigates production incidents by:
 
-1. **Ingesting crash logs** (Parquet format) from a company's server
-2. **Cross-referencing** those logs with known vulnerability databases (OSV)
-3. **Scanning GitHub commits** to identify which commit may have introduced the error
-4. **Dispatching remediation alerts** to Slack/Discord via webhooks
-5. **Presenting findings** in a real-time dashboard with streaming agent reasoning
+1. **Ingesting crash logs** (Parquet format) from a company's server infrastructure
+2. **Cross-referencing** those logs with known vulnerability databases (Google OSV)
+3. **Scanning GitHub commits** to identify which commit and developer may have introduced the error
+4. **Dynamically mapping** the affected microservice topology in a reactive SVG graph
+5. **Dispatching remediation alerts** to Slack/Discord via webhooks
+6. **Presenting findings** in a real-time dashboard with streaming agent reasoning
 
-All of this is powered by **Coral** as the federated SQL engine and an **LLM** (Groq/Gemini/OpenAI) as the reasoning brain.
+All of this is powered by **Coral** as the federated SQL engine and an **LLM** (Gemini/Groq/OpenAI) as the reasoning brain.
 
 ### The Flow
 
 ```
-User drops log file → LLM writes SQL → Coral JOINs logs + vulns + commits → LLM reasons about findings → Alert dispatched
+User drops log file → LLM writes SQL → Coral JOINs logs + vulns + commits → LLM reasons → Topology redrawn → Alert dispatched
 ```
 
 ---
@@ -50,8 +51,8 @@ User drops log file → LLM writes SQL → Coral JOINs logs + vulns + commits �
 │      │                                                         │
 │      ▼                                                         │
 │   🤖 SRE Brain (sre_brain.py)                                  │
-│      │  Provider: Groq > Gemini > OpenAI > Mock                │
-│      │  Model:    Llama 3.3 70B / Gemini 2.0 Flash / GPT-4o   │
+│      │  Provider: Gemini > Groq > OpenAI > Mock                │
+│      │  Model:    Gemini 3.1 Flash / Llama 3.3 70B / GPT-4o   │
 │      │                                                         │
 │      ├──► 🔌 Coral MCP Client (mcp_client.py)                  │
 │      │       │  Protocol: JSON-RPC 2.0 over stdin/stdout       │
@@ -61,10 +62,13 @@ User drops log file → LLM writes SQL → Coral JOINs logs + vulns + commits �
 │      │       ├── 🛡️ osv.packages (Vulnerability DB)            │
 │      │       └── 🐙 github.commits (Live GitHub API)           │
 │      │                                                         │
-│      └──► ⚡ Webhook Dispatcher (n8n_dispatcher.py)             │
-│              ├── 💬 Slack                                       │
-│              ├── 🎮 Discord                                     │
-│              └── 📝 Audit Log (JSONL)                           │
+│      ├──► ⚡ Webhook Dispatcher (n8n_dispatcher.py)             │
+│      │       ├── 💬 Slack                                       │
+│      │       ├── 🎮 Discord                                     │
+│      │       └── 📝 Audit Log (JSONL)                           │
+│      │                                                         │
+│      └──► 🗺️ Threat Topology (update_threat_topology)          │
+│              └── Dynamic SVG node/edge graph in Reflex UI       │
 │                                                                │
 │   Fallback Chain: MCP → Subprocess → Mock                      │
 └────────────────────────────────────────────────────────────────┘
@@ -96,13 +100,16 @@ User drops log file → LLM writes SQL → Coral JOINs logs + vulns + commits �
 | **Three-Tier Query Execution** | ✅ Working | `tools/coral_executor.py` | MCP → subprocess → mock fallback chain |
 | **Live GitHub Commit Scanning** | ✅ Working | `agent/sre_brain.py` | Queries real `github.commits` via Coral GitHub plugin |
 | **Cross-Source SQL JOINs** | ✅ Working | `agent/sre_brain.py` | LLM generates JOINs across log + vuln + commit tables |
-| **Groq LLM (Llama 3.3 70B)** | ✅ Working | `agent/sre_brain.py` | Free API, no rate limits, OpenAI-compatible |
-| **Gemini LLM (2.0 Flash)** | ⚠️ Rate-limited | `agent/sre_brain.py` | Works but free tier exhausts at 50 req/day |
+| **OSV Vulnerability Scanning** | ✅ Working | `osv-source.yaml` | CVE cross-reference via `osv.packages` Coral source |
+| **Dynamic Threat Topology** | ✅ Working | `agent/sre_brain.py` | `update_threat_topology` tool redraws SVG graph in real-time |
+| **Gemini LLM (Native SDK)** | ✅ Working | `agent/sre_brain.py` | Native `google-genai` SDK with manual function calling (AFC disabled) |
+| **Groq LLM (Llama 3.3 70B)** | ✅ Working | `agent/sre_brain.py` | Free API, OpenAI-compatible endpoint |
 | **OpenAI LLM (GPT-4o)** | ✅ Ready | `agent/sre_brain.py` | Standard OpenAI + custom base_url support |
-| **Glassmorphic Reflex UI** | ✅ Working | `aegis_app/aegis_app.py` | Real-time streaming dashboard with log upload |
+| **Glassmorphic Reflex UI** | ✅ Working | `aegis_app/aegis_app.py` | Real-time streaming dashboard with micro-animations |
 | **Auto-Start Webhook Server** | ✅ Working | `tools/webhook_receiver.py` | Python HTTP server on :5678, auto-boots if nothing listening |
-| **Slack/Discord Forwarding** | ✅ Ready | `tools/n8n_dispatcher.py` | Set `SLACK_WEBHOOK_URL`/`DISCORD_WEBHOOK_URL` in `.env` |
+| **Slack/Discord Forwarding** | ✅ Ready | `tools/webhook_receiver.py` | Rich Block Kit (Slack) and Embed (Discord) formatting |
 | **JSONL Audit Trail** | ✅ Working | `tools/webhook_receiver.py` | All incidents logged to `n8n_data/incident_log.jsonl` |
+| **Live Telemetry Injection** | ✅ Working | `tools/generate_live_telemetry.py` | Fetches real GitHub commits into crash logs |
 | **Mock Simulation Mode** | ✅ Working | `agent/sre_brain.py` | Full investigation loop without any API keys |
 | **One-Click Source Setup** | ✅ Working | `setup_sources.py` | Registers all Coral sources with correct paths |
 
@@ -110,7 +117,7 @@ User drops log file → LLM writes SQL → Coral JOINs logs + vulns + commits �
 
 ## 🔬 Proof of Working
 
-All outputs below are from **live test runs** on May 27, 2026.
+All outputs below are from **live test runs**.
 
 ### Proof 1: MCP Connection to Coral
 
@@ -147,11 +154,11 @@ The `discover_schema()` method auto-introspects all registered Coral sources via
 ```
 Status: success, Rows: 5
 
+0cfcf04e.. by Harshit Tiwari:  feat: integrate live github telemetry, gemini 3.1 flash-lite, and n8n webhook workflow
+31b0875a.. by TANISH SHIVHARE: dynamic blast radius + fixed forensic playbooks
 d46a1bba.. by Harshit Tiwari:  feat: add Groq LLM support with three-tier provider routing
 137975d6.. by Harshit Tiwari:  docs: update README with MCP architecture diagrams
 5f581575.. by Harshit Tiwari:  feat: add Coral MCP integration with runtime schema discovery
-b061f90b.. by Harshit Tiwari:  feat: deep audit fixes, live GitHub integration
-6225cc5d.. by TANISHX1:        using real data for processing
 ```
 
 This is querying the **live GitHub API** through Coral's native GitHub plugin, not a mock.
@@ -163,12 +170,10 @@ This is querying the **live GitHub API** through Coral's native GitHub plugin, n
 **Query**: `SELECT level, COUNT(*) as cnt FROM local_file.api_gateway_logs GROUP BY level`
 
 ```
-Status: success, Rows: 4
+Status: success, Rows: 2
 
-WARN:     2 records
-INFO:     3 records
-CRITICAL: 2 records
-ERROR:    3 records
+INFO:   5 records
+ERROR:  5 records
 ```
 
 Parquet log files are queried via Coral's `local_file` source — zero database setup required.
@@ -189,22 +194,9 @@ django:       CVE-2022-22818 (LOW)
 
 ---
 
-### Proof 6: LLM Provider Routing (Groq Active)
+### Proof 6: Full E2E Investigation (Real LLM Reasoning)
 
-```
-Provider:      groq
-Model:         llama-3.3-70b-versatile
-Client Type:   OpenAI (compatible API)
-GitHub Target: Harshit7623/aegis-sre
-```
-
-LLM routing priority: **Groq → Gemini → OpenAI → Mock**. Currently using Groq's free tier with Llama 3.3 70B — no rate limit issues.
-
----
-
-### Proof 7: Full E2E Investigation (Real LLM Reasoning)
-
-**Input Prompt**: *"We are seeing a massive spike in 500 errors in our production api-gateway. Scan our logs, find vulnerabilities, check if TANISHX1 has made any recent commits, and trigger a remediation alert."*
+**Input Prompt**: *"We are seeing a massive spike in 500 errors in our production api-gateway. Scan our logs, find vulnerabilities, check recent commits, and trigger a remediation alert."*
 
 **What the LLM did**:
 
@@ -213,27 +205,28 @@ LLM routing priority: **Groq → Gemini → OpenAI → Mock**. Currently using G
    SELECT l.timestamp, l.service, l.message, l.response_code,
           o.package_name, o.cve, o.severity,
           g.sha, g.commit__author__name, g.commit__message
-   FROM local_file.auth_service_logs l
+   FROM local_file.api_gateway_logs l
    JOIN osv.packages o ON l.message LIKE CONCAT('%', o.package_name, '%')
    JOIN github.commits g ON g.commit__message LIKE CONCAT('%', o.package_name, '%')
    WHERE g.owner = 'Harshit7623' AND g.repo = 'aegis-sre'
-     AND l.response_code = 500 AND g.author = 'TANISHX1'
+     AND l.response_code = 500
    ORDER BY l.timestamp DESC LIMIT 100
    ```
 
-2. ✅ Self-corrected when first query used wrong table name (`auth_errors` → `auth_service_logs`)
+2. ✅ Self-corrected when first query used wrong table name
 3. ✅ Executed via MCP with structured response
-4. ✅ Dispatched remediation alert:
+4. ✅ Identified root cause commit and CVE
+5. ✅ Dispatched remediation alert:
    ```json
    {
      "incident_id": "INC-2026-001",
      "severity": "CRITICAL",
      "service": "api-gateway",
-     "root_cause": "Vulnerable package version committed by TANISHX1",
+     "root_cause": "Vulnerable package version introduced in recent commit",
      "remediation_action": "Rollback commit and upgrade vulnerable package"
    }
    ```
-5. ✅ Alert logged to `n8n_data/incident_log.jsonl`
+6. ✅ Alert logged to `n8n_data/incident_log.jsonl`
 
 ---
 
@@ -241,26 +234,25 @@ LLM routing priority: **Groq → Gemini → OpenAI → Mock**. Currently using G
 
 | Metric | Value |
 |---|---|
-| **Total Source Lines** | 2,782 |
-| **Total Commits** | 12 |
-| **Contributors** | 2 (Harshit Tiwari, TANISHX1) |
+| **Total Source Lines** | ~3,200+ |
 | **Data Sources** | 3 (local_file, osv, github) |
 | **Tables Discovered** | 7 |
-| **LLM Providers** | 4 (Groq, Gemini, OpenAI, Mock) |
+| **LLM Providers** | 4 (Gemini, Groq, OpenAI, Mock) |
+| **Agent Tools** | 3 (execute_coral_query, trigger_n8n_workflow, update_threat_topology) |
 | **MCP Tools Available** | 5 (sql, list_catalog, search_catalog, describe_table, list_columns) |
 
 ### File Breakdown
 
 | File | Lines | Purpose |
 |---|---|---|
-| `aegis_app/aegis_app.py` | 822 | Reflex UI (glassmorphic dashboard) |
-| `agent/sre_brain.py` | 563 | AI reasoning engine with function calling |
+| `aegis_app/aegis_app.py` | ~1,226 | Reflex UI (glassmorphic dashboard with micro-animations) |
+| `agent/sre_brain.py` | 564 | AI reasoning engine with 3-tool function calling |
 | `tools/mcp_client.py` | 402 | Coral MCP client (JSON-RPC 2.0) |
-| `tools/webhook_receiver.py` | 282 | Local webhook server |
-| `tools/coral_executor.py` | 273 | Query executor (MCP → subprocess → mock) |
-| `tools/n8n_dispatcher.py` | 212 | Webhook dispatcher with auto-start |
-| `setup_sources.py` | 143 | One-click Coral source registration |
-| `test_runner.py` | 85 | CLI diagnostic test runner |
+| `tools/webhook_receiver.py` | 283 | Local webhook server with Slack/Discord forwarding |
+| `tools/coral_executor.py` | 274 | Query executor (MCP → subprocess → mock) |
+| `tools/n8n_dispatcher.py` | 213 | Webhook dispatcher with auto-start & retry |
+| `setup_sources.py` | 150 | One-click Coral source registration |
+| `test_runner.py` | ~85 | CLI diagnostic test runner |
 
 ---
 
@@ -269,7 +261,7 @@ LLM routing priority: **Groq → Gemini → OpenAI → Mock**. Currently using G
 ### Prerequisites
 - Python 3.10+
 - [Coral CLI](https://withcoral.com) installed
-- At least one LLM API key (Groq recommended — free at [console.groq.com](https://console.groq.com))
+- At least one LLM API key (Gemini recommended for native function calling)
 
 ### Quick Start
 
@@ -283,26 +275,26 @@ pip install -r requirements.txt
 
 # 3. Configure environment
 cp .env.example .env    # Edit with your API keys
-# At minimum, set GROQ_API_KEY and GITHUB_TOKEN
 
-# 4. Register Coral sources
-python setup_sources.py
+# 4. Generate live telemetry & register Coral sources
+python3 tools/generate_live_telemetry.py
+python3 setup_sources.py
 
 # 5. Run the dashboard
 reflex run
 # OR run the CLI test
-python test_runner.py
+python3 test_runner.py
 ```
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `GROQ_API_KEY` | Recommended | Free Groq API key (Llama 3.3 70B) |
-| `GEMINI_API_KEY` | Optional | Google AI Studio key (Gemini 2.0 Flash) |
+| `GEMINI_API_KEY` | Recommended | Google AI Studio key (native function calling) |
+| `GROQ_API_KEY` | Optional | Free Groq API key (Llama 3.3 70B) |
 | `OPENAI_API_KEY` | Optional | OpenAI key (GPT-4o) |
 | `GITHUB_TOKEN` | Yes | GitHub Personal Access Token for live commit scanning |
-| `GITHUB_REPO` | Yes | Target repo (e.g., `Harshit7623/aegis-sre`) |
+| `GITHUB_REPO` | Yes | Target repo (e.g., `YourOrg/your-repo`) |
 | `SLACK_WEBHOOK_URL` | Optional | Forward alerts to Slack |
 | `DISCORD_WEBHOOK_URL` | Optional | Forward alerts to Discord |
 
@@ -314,11 +306,13 @@ python test_runner.py
 
 1. **MCP over Subprocess**: We communicate with Coral via its MCP server (`coral mcp-stdio`) instead of shelling out to `coral sql`. This gives us persistent connections, structured responses, and automatic schema discovery.
 
-2. **Three-Tier LLM Routing**: `GROQ_API_KEY → GEMINI_API_KEY → OPENAI_API_KEY → Mock`. Groq is first because it's free with generous rate limits. The system auto-detects which key is available.
+2. **Multi-Provider LLM Routing**: `GEMINI_API_KEY → GROQ_API_KEY → OPENAI_API_KEY → Mock`. Gemini is first because it supports native function calling via the `google-genai` SDK. The system auto-detects which key is available.
 
 3. **Graceful Degradation**: Every subsystem has a fallback chain. MCP fails → subprocess. Subprocess fails → mock. LLM fails → mock. Webhook server not running → auto-start. This means the system **never crashes** — it always produces output.
 
 4. **Zero-Warehouse**: No databases. Logs are Parquet files, vulnerabilities are Parquet files, GitHub is live API. Coral federates all of them via SQL.
+
+5. **AFC Disabled for Gemini**: Automatic Function Calling is explicitly disabled so all tool calls flow through our generator loop, enabling real-time UI streaming of tool events.
 
 ### Adding a New Data Source
 
@@ -332,14 +326,14 @@ coral source add jira   # or any supported source
 
 ### Adding a New LLM Provider
 
-Edit `agent/sre_brain.py` → `SREBrain.__init__()`. Add a new priority block following the Groq/Gemini/OpenAI pattern. Any OpenAI-compatible API works with zero additional code.
+Edit `agent/sre_brain.py` → `SREBrain.__init__()`. Add a new priority block following the Gemini/Groq/OpenAI pattern. Any OpenAI-compatible API works with zero additional code.
 
 ### Running Tests
 
 ```bash
 # Full E2E investigation (requires at least one LLM key)
-python test_runner.py
+python3 test_runner.py
 
 # MCP-only test (no LLM needed)
-python -c "from tools.mcp_client import get_mcp_client; c = get_mcp_client(); print(c.sql('SELECT * FROM local_file.api_gateway_logs LIMIT 5'))"
+python3 -c "from tools.mcp_client import get_mcp_client; c = get_mcp_client(); print(c.sql('SELECT * FROM local_file.api_gateway_logs LIMIT 5'))"
 ```

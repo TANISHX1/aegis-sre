@@ -130,18 +130,18 @@ class State(rx.State):
 
     # Details of node clicked in the Threat panel
     selected_node_info: Dict[str, str] = {
-        "id": "",
-        "name": "N/A",
-        "status": "N/A",
-        "ip": "N/A",
-        "vulnerable": "N/A",
-        "remediation": "N/A"
+        "id": "none",
+        "name": "No Service Selected",
+        "status": "Healthy",
+        "ip": "-",
+        "vulnerable": "None",
+        "remediation": "Awaiting analysis. Tap a node to inspect."
     }
     
     # 6. Integrations State
     github_token: str = os.environ.get("GITHUB_TOKEN", "")
-    github_owner: str = os.environ.get("GITHUB_REPO", "Harshit7623/aegis-sre").split("/")[0] if "/" in os.environ.get("GITHUB_REPO", "Harshit7623/aegis-sre") else "Harshit7623"
-    github_repo_name: str = os.environ.get("GITHUB_REPO", "Harshit7623/aegis-sre").split("/")[1] if "/" in os.environ.get("GITHUB_REPO", "Harshit7623/aegis-sre") else "aegis-sre"
+    github_owner: str = os.environ.get("GITHUB_REPO", "Harshit7623/Aegis_demo_repo").split("/")[0] if "/" in os.environ.get("GITHUB_REPO", "Harshit7623/Aegis_demo_repo") else "Harshit7623"
+    github_repo_name: str = os.environ.get("GITHUB_REPO", "Harshit7623/Aegis_demo_repo").split("/")[1] if "/" in os.environ.get("GITHUB_REPO", "Harshit7623/Aegis_demo_repo") else "Aegis_demo_repo"
     github_connection_status: str = "Checking..."
     osv_connection_status: str = "Checking..."
     show_github_token_input: bool = False
@@ -256,12 +256,8 @@ class State(rx.State):
         """
         for n in self.blast_radius_nodes:
             if n["id"] == node_id:
-                # Custom logic calculating remediation recommendations based on vulnerable statuses
-                remediation = "None needed. Service is stable."
-                if "urllib3" in n["vulnerable"]:
-                    remediation = "Upgrade urllib3 to 1.26.18, roll back TANISHX1's commit a5d89f3."
-                elif "cryptography" in n["vulnerable"]:
-                    remediation = "Patch package cryptography to version 38.0.2 via Poetry."
+                # Use the dynamic remediation string provided by the AI agent's topology update
+                remediation = n.get("remediation", "None needed. Service is stable.")
                 
                 ip_map = {
                     "api-gateway": "192.168.1.42",
@@ -318,6 +314,19 @@ class State(rx.State):
                 self.uploaded_logs.append(safe_name)
                 
             self.agent_thought_log.append(f"📁 Forensic Log mounted: {safe_name} -> Available inside Coral as local_file.read('/logs/{safe_name}')")
+
+    def remove_log(self, filename: str):
+        """Removes a log file from the state and the file system."""
+        if filename in self.uploaded_logs:
+            self.uploaded_logs.remove(filename)
+        
+        filepath = os.path.join("logs", filename)
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+                self.agent_thought_log.append(f"🗑️ Log unmounted: {filename}")
+            except Exception as e:
+                self.agent_thought_log.append(f"⚠️ Failed to remove {filename}: {str(e)}")
 
     @rx.event(background=True)
     async def run_predefined_playbook(self, prompt: str):
@@ -692,7 +701,7 @@ def integrations_dialog() -> rx.Component:
                         rx.text("2. Target Repository Scope:", size="2", font_weight="bold"),
                         rx.text("All workings will use this default repository unless overridden in the prompt.", size="1", color="gray"),
                         rx.hstack(
-                            rx.input(placeholder="Username (e.g. TANISHX1)", on_change=State.set_github_owner, width="50%"),
+                            rx.input(placeholder="Username (e.g. dev-user)", on_change=State.set_github_owner, width="50%"),
                             rx.input(placeholder="Repository (e.g. seat-allocation-sys)", on_change=State.set_github_repo_name, width="50%"),
                             width="100%"
                         ),
@@ -974,8 +983,18 @@ def sidebar_forensics() -> rx.Component:
                     lambda log_name: rx.hstack(
                         rx.text("📄", font_size="12px"),
                         rx.text(log_name, font_size="11px", color="rgba(255,255,255,0.8)", overflow="hidden", text_overflow="ellipsis", font_family="JetBrains Mono"),
+                        rx.spacer(),
+                        rx.icon(
+                            "trash",
+                            size=14,
+                            color="rgba(255, 111, 97, 0.8)",
+                            cursor="pointer",
+                            on_click=lambda: State.remove_log(log_name),
+                            _hover={"color": "red"}
+                        ),
                         width="100%",
                         padding="6px 10px",
+                        align="center",
                         background_color="rgba(255,255,255,0.03)",
                         border_radius="6px",
                         border="1px solid rgba(255,255,255,0.05)"
@@ -1179,7 +1198,7 @@ def chat_console() -> rx.Component:
         # 3. CHAT INPUT SHELF
         rx.hstack(
             rx.input(
-                placeholder="Ask about logs, request a vulnerability check, or trigger remediation...",
+                placeholder="Describe incident or request a forensic investigation...",
                 value=State.current_question,
                 on_change=State.set_current_question,
                 on_key_down=State.handle_key_down,
@@ -1190,9 +1209,13 @@ def chat_console() -> rx.Component:
                     "border_radius": "8px",
                     "font_family": "Inter",
                     "font_size": "13px",
-                    "padding": "10px 15px",
-                    "width": "100%"
+                    "padding_left": "15px",
+                    "padding_right": "15px",
+                    "height": "45px",
+                    "box_sizing": "border-box"
                 },
+                flex="1",
+                width="100%",
                 disabled=State.is_investigating
             ),
             rx.button(
@@ -2027,7 +2050,7 @@ def landing_page() -> rx.Component:
                 style={"marginTop": "35px", "padding": "16px 48px", "fontSize": "13px"}
             ),
             
-            rx.text("v2.1.0 // LEVEL 5 CLASSIFIED ACCESS // TANISHX1", font_size="9px", font_family="JetBrains Mono", color="rgba(255,255,255,0.15)", letter_spacing="0.15em", margin_top="45px"),
+            rx.text("v2.1.0 // LEVEL 5 CLASSIFIED ACCESS", font_size="9px", font_family="JetBrains Mono", color="rgba(255,255,255,0.15)", letter_spacing="0.15em", margin_top="45px"),
             
             padding="120px 20px 160px 20px",
             width="100%",
@@ -2101,9 +2124,14 @@ def index() -> rx.Component:
 
 # Configure the Reflex compiler application instances
 app = rx.App(
+    theme=rx.theme(appearance="dark", accent_color="cyan", radius="large"),
     style={
         "font_family": "Inter",
         "background_color": "#050508",
+        "::placeholder": {
+            "color": "#a1a1aa !important",
+            "opacity": "1 !important",
+        }
     },
     stylesheets=[
         "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap",

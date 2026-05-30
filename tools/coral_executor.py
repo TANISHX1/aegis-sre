@@ -210,8 +210,8 @@ def _mock_coral_execution(query: str) -> Dict[str, Any]:
             "count": 2
         }
 
-    # Mock response for GitHub handle TANISHX1 commits
-    elif "TANISHX1" in query_upper or "GITHUB" in query_upper:
+    # Mock response for GitHub commits
+    elif "GITHUB" in query_upper or "COMMITS" in query_upper:
         try:
             import subprocess
             git_cmd = ["git", "log", "-n", "5", "--pretty=format:%H||%an||%ad||%s", "--date=iso"]
@@ -249,7 +249,7 @@ def _mock_coral_execution(query: str) -> Dict[str, Any]:
             "data": [
                 {
                     "commit_hash": "a5d89f3",
-                    "author": "TANISHX1",
+                    "author": "alice",
                     "commit_date": "2026-05-25T15:20:00Z",
                     "message": "Refactor auth-service logic and update dependencies",
                     "changed_files": "requirements.txt, auth_service/jwt.py"
