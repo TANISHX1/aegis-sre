@@ -1202,7 +1202,6 @@ def chat_console() -> rx.Component:
                 value=State.current_question,
                 on_change=State.set_current_question,
                 on_key_down=State.handle_key_down,
-                _placeholder={"color": "#a1a1aa", "opacity": "1"},
                 style={
                     "background_color": "rgba(255,255,255,0.03)",
                     "border": "1px solid rgba(255,255,255,0.1)",
@@ -2129,6 +2128,10 @@ app = rx.App(
     style={
         "font_family": "Inter",
         "background_color": "#050508",
+        "::placeholder": {
+            "color": "#a1a1aa !important",
+            "opacity": "1 !important",
+        }
     },
     stylesheets=[
         "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap",
